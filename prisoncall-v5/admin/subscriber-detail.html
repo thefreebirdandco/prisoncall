@@ -210,13 +210,16 @@ function render() {
   // Fulfil button
   document.getElementById('fulfilBtn')?.addEventListener('click', handleFulfil);
 
-  // DID input — enable Fulfil button only when DID is valid
+  // DID input — strip spaces/dashes on every keystroke or paste, then validate
   const didInputEl = document.getElementById('didInput');
   if (didInputEl) {
     didInputEl.addEventListener('input', () => {
-      const val = didInputEl.value.replace(/\D/g, '');
+      // Strip everything non-digit and cap at 11 digits, then write back so
+      // the field always shows clean digits (handles paste with spaces/dashes)
+      const digits = didInputEl.value.replace(/\D/g, '').slice(0, 11);
+      didInputEl.value = digits;
       const btn = document.getElementById('fulfilBtn');
-      if (btn) btn.disabled = !validateDID(val);
+      if (btn) btn.disabled = !validateDID(digits);
       // Clear error message while admin is still typing
       document.getElementById('didError')?.classList.remove('visible');
     });
@@ -301,7 +304,7 @@ function renderPendingAction() {
 
       <div class="form-group">
         <label class="form-label" for="didInput">Prisoncall Number (DID)</label>
-        <input class="form-input" id="didInput" placeholder="61XXXXXXXXX" maxlength="11" inputmode="numeric">
+        <input class="form-input" id="didInput" placeholder="61XXXXXXXXX" maxlength="20" inputmode="numeric">
         <p class="form-hint">11 digits, must start with 61</p>
         <p class="form-error" id="didError">Must be 11 digits starting with 61</p>
       </div>
