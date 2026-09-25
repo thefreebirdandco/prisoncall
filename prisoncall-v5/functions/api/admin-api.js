@@ -232,6 +232,43 @@ export async function onRequest({ request, env }) {
         return json({ data: { inserted: rows.length } });
       }
 
+      // ── Fulfilment (delegates to n8n WF1b — no Supabase write here) ──
+      case 'fulfil-subscriber': {
+        await requireAuth();
+        const { seal_subscription_id, did, customer_name, customer_email, customer_mobile, prison_name } = params;
+
+        if (!seal_subscription_id || !did) {
+          return json({ error: 'seal_subscription_id and did are required' }, 400);
+        }
+
+        // Server-side DID validation: exactly 11 digits, starts with 61
+        const didClean = String(did).replace(/\D/g, '');
+        if (didClean.length !== 11 || !didClean.startsWith('61')) {
+          return json({ error: 'Invalid DID: must be exactly 11 digits starting with 61' }, 400);
+        }
+
+        // POST to n8n WF1b — WF1b owns all Supabase writes for fulfilment
+        const n8nRes = await fetch('https://thefreebirdandco.app.n8n.cloud/webhook/prisoncall-fulfil', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            seal_subscription_id: String(seal_subscription_id),
+            did: didClean,
+            customer_name:   customer_name   || '',
+            customer_email:  customer_email  || '',
+            customer_mobile: customer_mobile || '',
+            prison_name:     prison_name     || '',
+          }),
+        });
+
+        if (!n8nRes.ok) {
+          const errText = await n8nRes.text().catch(() => 'n8n error');
+          return json({ error: `Fulfilment service returned ${n8nRes.status}: ${errText}` }, 502);
+        }
+
+        return json({ data: { ok: true } });
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }

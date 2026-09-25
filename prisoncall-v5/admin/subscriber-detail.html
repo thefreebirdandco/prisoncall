@@ -210,6 +210,18 @@ function render() {
   // Fulfil button
   document.getElementById('fulfilBtn')?.addEventListener('click', handleFulfil);
 
+  // DID input — enable Fulfil button only when DID is valid
+  const didInputEl = document.getElementById('didInput');
+  if (didInputEl) {
+    didInputEl.addEventListener('input', () => {
+      const val = didInputEl.value.replace(/\D/g, '');
+      const btn = document.getElementById('fulfilBtn');
+      if (btn) btn.disabled = !validateDID(val);
+      // Clear error message while admin is still typing
+      document.getElementById('didError')?.classList.remove('visible');
+    });
+  }
+
   // Resume button
   document.getElementById('resumeBtn')?.addEventListener('click', handleResume);
 
@@ -294,7 +306,7 @@ function renderPendingAction() {
         <p class="form-error" id="didError">Must be 11 digits starting with 61</p>
       </div>
 
-      <button class="btn btn--primary" id="fulfilBtn" style="width:100%;padding:12px">
+      <button class="btn btn--primary" id="fulfilBtn" disabled style="width:100%;padding:12px">
         Fulfil — Mark as Active
       </button>
     </div>`;
@@ -384,17 +396,28 @@ async function handleFulfil() {
   }
 
   const btn = document.getElementById('fulfilBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+  btn.disabled = true; btn.textContent = 'Fulfilling…';
 
   try {
-    await api('update-subscriber', { id, status: 'ACTIVE', current_did: val });
+    // POST to n8n WF1b via Cloudflare Pages Function.
+    // WF1b owns all Supabase writes (status=ACTIVE, current_did, activated_at).
+    await api('fulfil-subscriber', {
+      seal_subscription_id: sub.seal_subscription_id,
+      did:             val,                   // 11 digits, starts with 61, no plus
+      customer_name:   sub.customer_name   || '',
+      customer_email:  sub.customer_email  || '',
+      customer_mobile: sub.customer_mobile || '', // stored as 61XXXXXXXXX (no plus)
+      prison_name:     sub.prison_name     || '',
+    });
+
+    // Update local state so the re-render reflects ACTIVE immediately
     sub.status      = 'ACTIVE';
     sub.current_did = val;
     document.getElementById('headerStatus').innerHTML = statusPill('ACTIVE');
-    showToast('Fulfilled - subscriber is now active', 'success');
+    showToast('Fulfilled — subscriber is now active', 'success');
     render();
   } catch (err) {
-    showToast(err.message || 'Failed to fulfil', 'error');
+    showToast(err.message || 'Failed to fulfil — please try again', 'error');
     btn.disabled = false; btn.textContent = 'Fulfil — Mark as Active';
   }
 }
