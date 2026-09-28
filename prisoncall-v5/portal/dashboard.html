@@ -135,10 +135,9 @@
     var subs = [];
     var cancelSubId = null;
     var PLAN_OPTIONS = [
-      { key: 'weekly',      label: 'Weekly',      price: '14.99', interval: '/week' },
-      { key: 'fortnightly', label: 'Fortnightly',  price: '19.99', interval: '/fortnight' },
-      { key: 'monthly',     label: 'Monthly',      price: '34.99', interval: '/month' },
-      { key: 'annual',      label: 'Annual',       price: '349.99',interval: '/year' },
+      { key: 'fortnightly', label: 'Fortnightly', interval: 'every 2 weeks' },
+      { key: 'monthly',     label: 'Monthly',     interval: 'every month'   },
+      { key: 'halfyearly',  label: 'Half-Yearly', interval: 'every 6 months'},
     ];
 
     /* ─── Format mobile as 04XX XXX XXX ─── */
@@ -217,6 +216,30 @@
       visibleSubs.forEach(function (sub) { html += renderCard(sub, activeCount); });
       document.getElementById('subCards').innerHTML = html;
       wireAllCards();
+
+      // Load Seal billing data for each subscription card
+      subs.forEach(function (sub) {
+        if (sub.status !== 'ACTIVE' && sub.status !== 'SUSPENDED') return;
+        fetch('/api/portal-supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get-seal-data', subscription_id: sub.id }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data.ok) return;
+            var dateEl = document.getElementById('next-billing-' + sub.id);
+            if (dateEl && data.next_billing_date) {
+              var d = new Date(data.next_billing_date);
+              dateEl.textContent = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+            }
+            var intervalEl = document.getElementById('billing-interval-' + sub.id);
+            if (intervalEl && data.delivery_interval) {
+              intervalEl.textContent = data.delivery_interval;
+            }
+          })
+          .catch(function () { /* non-critical — billing data stays blank */ });
+      });
     }
 
     /* ─── Status badge ─── */
@@ -308,7 +331,7 @@
                         sub.status === 'PENDING' || sub.status === 'DID_ORDERED' ||
                         sub.status === 'ACTIVATING');
       var nextBill = (sub.status !== 'CANCELLED')
-        ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
+        ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val" id="next-billing-' + sub.id + '">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
         : '';
       var price = parseFloat(sub.plan_price || 0).toFixed(2);
 
@@ -373,11 +396,34 @@
           openCancelOverlay(this.dataset.subId);
         });
       });
-      /* Payment update stub */
+      /* Payment update */
       document.querySelectorAll('.payment-update-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          var stub = document.getElementById('pay-stub-' + this.dataset.subId);
-          if (stub) stub.classList.add('is-visible');
+          var subId = this.dataset.subId;
+          var self = this;
+          self.disabled = true;
+          self.textContent = 'Sending…';
+          fetch('/api/portal-supabase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update-payment-method', subscription_id: subId }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                showCardMsg(subId, data.message || 'Payment update link sent. Check your email.', 'success');
+              } else {
+                showCardMsg(subId, 'Could not send update link. Please try again.', 'error');
+              }
+            })
+            .catch(function () {
+              showCardMsg(subId, 'Network error. Please try again.', 'error');
+            })
+            .finally(function () {
+              self.disabled = false;
+              self.textContent = 'Update Payment Method';
+              setTimeout(function () { clearCardMsg(subId); }, 6000);
+            });
         });
       });
     }
@@ -633,7 +679,6 @@
               ' data-plan-key="' + opt.key + '">',
               isCurrent ? '<div class="plan-current-tag">Current plan</div>' : '',
               '<div class="plan-option__label">' + PortalAuth.esc(opt.label) + '</div>',
-              '<div class="plan-option__price">$' + opt.price + '</div>',
               '<div class="plan-option__interval">' + opt.interval + '</div>',
             '</div>',
           ].join('');
@@ -680,22 +725,34 @@
           confirmBtn.addEventListener('click', function () {
             if (!selectedKey) return;
             var btn = this;
-            var newPlan = PLAN_OPTIONS.find(function (o) { return o.key === selectedKey; });
-            // STUB: no Stripe API call — log and show confirmation
-            console.log(
-              'PLAN CHANGE STUB - ' +
-              (sub ? sub.customer_name : '-') +
-              ' / ' + currentKey + ' -> ' + selectedKey +
-              ' / subscription_id: ' + sid
-            );
-            showCardMsg(sid,
-              'Your plan has been changed. Stripe will automatically adjust your next billing amount and date.',
-              'success');
-            /* Auto-close the panel after 3 s, then clear the success message */
-            setTimeout(function () {
-              closePanelEl(panel);
-              setTimeout(function () { clearCardMsg(sid); }, 220);
-            }, 3000);
+            btn.disabled = true;
+            btn.textContent = 'Changing plan…';
+            fetch('/api/portal-supabase', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'change-plan', subscription_id: sid, target_interval: selectedKey }),
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data.error === 'already_on_this_plan') {
+                  showCardMsg(sid, 'You\'re already on this plan.', 'info');
+                } else if (data.ok) {
+                  showCardMsg(sid, 'Plan changed to ' + data.new_title + '. Your next billing will reflect the new amount.', 'success');
+                } else {
+                  showCardMsg(sid, 'Something went wrong. Please try again or contact support.', 'error');
+                }
+                setTimeout(function () {
+                  closePanelEl(panel);
+                  setTimeout(function () { clearCardMsg(sid); }, 220);
+                }, 4000);
+              })
+              .catch(function () {
+                showCardMsg(sid, 'Network error. Please try again.', 'error');
+              })
+              .finally(function () {
+                btn.disabled = false;
+                btn.textContent = 'Confirm';
+              });
           });
         }
 

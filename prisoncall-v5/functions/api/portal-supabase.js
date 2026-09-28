@@ -39,6 +39,56 @@ function makeSb(supabaseUrl, serviceKey) {
   };
 }
 
+// ─── Seal API ────────────────────────────────────────────────────────────────
+const SEAL_API = 'https://app.sealsubscriptions.com/shopify/merchant/api';
+
+function sealApi(env, path, opts = {}) {
+  return fetch(`${SEAL_API}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Seal-Token': env.SEAL_API_TOKEN,
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+// Shopify variant IDs by tier and interval (from Prisoncall_Shopify_Product_IDs_v1_0.xlsx)
+const VARIANT_BY_INTERVAL = {
+  fortnightly: {
+    0: { variant_id: '54535954497815', product_id: '10440892154135', price: 19.99, title: 'Fortnightly Plan' },
+    1: { variant_id: '54535954891031', product_id: '10440892317975', price: 23.98, title: 'Fortnightly Plan + Transfer Guarantee' },
+    2: { variant_id: '54535954956567', product_id: '10440892383511', price: 23.98, title: 'Fortnightly Plan + Renewal Guarantee' },
+    3: { variant_id: '54535955218711', product_id: '10440892514583', price: 26.98, title: 'Fortnightly Plan + Combo (Transfer & Renewal) Guarantee' },
+  },
+  monthly: {
+    0: { variant_id: '54535955382551', product_id: '10440892678423', price: 34.99, title: 'Monthly Plan' },
+    1: { variant_id: '54535955546391', product_id: '10440892842263', price: 39.98, title: 'Monthly Plan + Transfer Guarantee' },
+    2: { variant_id: '54535955710231', product_id: '10440892940567', price: 39.98, title: 'Monthly Plan + Renewal Guarantee' },
+    3: { variant_id: '54535955841303', product_id: '10440893038871', price: 42.98, title: 'Monthly Plan + Combo (Transfer & Renewal) Guarantee' },
+  },
+  halfyearly: {
+    0: { variant_id: '54535956005143', product_id: '10440893104407', price: 174.99, title: 'Half Yearly Plan' },
+    1: { variant_id: '54535957020951', product_id: '10440893956375', price: 186.98, title: 'Half Yearly Plan + Transfer Guarantee' },
+    2: { variant_id: '54535957086487', product_id: '10440894021911', price: 186.98, title: 'Half Yearly Plan + Renewal Guarantee' },
+    3: { variant_id: '54535957119255', product_id: '10440894054679', price: 194.98, title: 'Half Yearly Plan + Combo (Transfer & Renewal) Guarantee' },
+  },
+};
+
+// Map a Shopify variant_id string → { tier, interval }
+const VARIANT_TIER_MAP = {};
+for (const [interval, tiers] of Object.entries(VARIANT_BY_INTERVAL)) {
+  for (const [tier, v] of Object.entries(tiers)) {
+    VARIANT_TIER_MAP[v.variant_id] = { tier: Number(tier), interval };
+  }
+}
+
+const SEAL_INTERVAL_EDIT = {
+  fortnightly: { delivery_interval: '2 week',  billing_interval: '2 week'  },
+  monthly:     { delivery_interval: '1 month', billing_interval: '1 month' },
+  halfyearly:  { delivery_interval: '6 month', billing_interval: '6 month' },
+};
+
 // ─── GET handler — read-only actions ───────────────────────────────────────
 
 export async function onRequestGet(context) {
@@ -184,21 +234,25 @@ export async function onRequestPost(context) {
     const sub = subRows[0];
     if (sub.customer_mobile !== mobile) return json({ error: 'forbidden' }, 403);
 
+    // Call Seal API to cancel the subscription
+    const sealId = parseInt(sub.seal_subscription_id, 10);
+    const sealRes = await sealApi(env, '/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({ id: sealId, action: 'cancel' }),
+    });
+    if (!sealRes.ok) {
+      const sealErr = await sealRes.text();
+      console.error('Seal cancel error:', sealErr);
+      return json({ error: 'seal_cancel_failed' }, 502);
+    }
+
+    // Mark CANCELLATION_PENDING in Supabase — WF4 (subscription/cancelled webhook) flips to CANCELLED
     await sb(`subscriptions?id=eq.${encodeURIComponent(subscription_id)}`, {
       method: 'PATCH',
-      prefer: 'return=minimal',
       body: JSON.stringify({ status: 'CANCELLATION_PENDING', updated_at: new Date().toISOString() }),
     });
 
-    // STUBS: admin SMS + 3CX deletion
-    console.log(
-      `CANCELLATION ADMIN SMS STUB — To: Guness + Dinisha — CANCELLATION: ${sub.customer_name} / ${sub.prison_name} / DID: ${sub.current_did} / Plan: ${sub.plan_interval} $${sub.plan_price} / Mobile: ${sub.customer_mobile}`
-    );
-    console.log(
-      `3CX DELETION STUB — Extension: ${sub.current_extension} — Wire after 3CX licence purchased`
-    );
-
-    return json({ success: true });
+    return json({ ok: true });
   }
 
   // ── logout ───────────────────────────────────────────────────────────────
@@ -262,6 +316,146 @@ export async function onRequestPost(context) {
         'Set-Cookie': cookieHeader,
       },
     });
+  }
+
+  // ─── get-seal-data ──────────────────────────────────────────────────────────
+  if (action === 'get-seal-data') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+    const { subscription_id } = body;
+    if (!subscription_id) return json({ error: 'missing_fields' }, 400);
+
+    const subRes = await sb(`subscriptions?id=eq.${encodeURIComponent(subscription_id)}&select=seal_subscription_id,customer_email&limit=1`);
+    const subData = await subRes.json();
+    const sub = Array.isArray(subData) ? subData[0] : null;
+    if (!sub || sub.customer_mobile !== session.mobile) return json({ error: 'forbidden' }, 403);
+
+    const sealRes = await sealApi(env, `/subscriptions?customer_email=${encodeURIComponent(sub.customer_email)}&includes=subscription_line_items`);
+    if (!sealRes.ok) return json({ error: 'seal_fetch_failed' }, 502);
+    const sealData = await sealRes.json();
+    const subscriptions = sealData.subscriptions || sealData || [];
+    const sealSub = subscriptions.find(s => String(s.id) === String(sub.seal_subscription_id));
+    if (!sealSub) return json({ error: 'seal_sub_not_found' }, 404);
+
+    return json({
+      ok: true,
+      next_billing_date: sealSub.next_billing_date || sealSub.next_billing_at || null,
+      delivery_interval: sealSub.delivery_interval || null,
+      billing_interval: sealSub.billing_interval || null,
+      status: sealSub.status || null,
+    });
+  }
+
+  // ─── update-payment-method ─────────────────────────────────────────────────
+  if (action === 'update-payment-method') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+    const { subscription_id } = body;
+    if (!subscription_id) return json({ error: 'missing_fields' }, 400);
+
+    const subRes = await sb(`subscriptions?id=eq.${encodeURIComponent(subscription_id)}&select=seal_subscription_id,customer_mobile&limit=1`);
+    const subData = await subRes.json();
+    const sub = Array.isArray(subData) ? subData[0] : null;
+    if (!sub || sub.customer_mobile !== session.mobile) return json({ error: 'forbidden' }, 403);
+
+    const sealId = parseInt(sub.seal_subscription_id, 10);
+    const sealRes = await sealApi(env, '/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({ id: sealId, action: 'send_payment_method_update_email' }),
+    });
+    if (!sealRes.ok) {
+      const sealErr = await sealRes.text();
+      console.error('Seal payment update error:', sealErr);
+      return json({ error: 'seal_email_failed' }, 502);
+    }
+    return json({ ok: true, message: 'We\'ve sent a payment update link to your email. Check your inbox.' });
+  }
+
+  // ─── change-plan ────────────────────────────────────────────────────────────
+  if (action === 'change-plan') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+    const { subscription_id, target_interval } = body;
+    if (!subscription_id || !target_interval) return json({ error: 'missing_fields' }, 400);
+    if (!['fortnightly', 'monthly', 'halfyearly'].includes(target_interval)) return json({ error: 'invalid_interval' }, 400);
+
+    const subRes = await sb(`subscriptions?id=eq.${encodeURIComponent(subscription_id)}&select=seal_subscription_id,customer_email,customer_mobile&limit=1`);
+    const subData = await subRes.json();
+    const sub = Array.isArray(subData) ? subData[0] : null;
+    if (!sub || sub.customer_mobile !== session.mobile) return json({ error: 'forbidden' }, 403);
+
+    const sealId = parseInt(sub.seal_subscription_id, 10);
+
+    // Step 1: GET current subscription to find current line item ID and variant
+    const getRes = await sealApi(env, `/subscriptions?customer_email=${encodeURIComponent(sub.customer_email)}&includes=subscription_line_items`);
+    if (!getRes.ok) return json({ error: 'seal_fetch_failed' }, 502);
+    const getData = await getRes.json();
+    const subscriptions = getData.subscriptions || getData || [];
+    const sealSub = subscriptions.find(s => String(s.id) === String(sub.seal_subscription_id));
+    if (!sealSub) return json({ error: 'seal_sub_not_found' }, 404);
+
+    const lineItems = sealSub.subscription_line_items || sealSub.line_items || [];
+    if (!lineItems.length) return json({ error: 'no_line_items' }, 422);
+
+    // Find the main subscription line item (exclude one-time add-ons)
+    const mainItem = lineItems.find(li => !li.one_time && li.variant_id && VARIANT_TIER_MAP[String(li.variant_id)]);
+    if (!mainItem) return json({ error: 'cannot_determine_tier' }, 422);
+
+    const currentVariantId = String(mainItem.variant_id);
+    const tierInfo = VARIANT_TIER_MAP[currentVariantId];
+    if (!tierInfo) return json({ error: 'unknown_variant' }, 422);
+
+    if (tierInfo.interval === target_interval) return json({ error: 'already_on_this_plan' }, 400);
+
+    const newVariant = VARIANT_BY_INTERVAL[target_interval][tierInfo.tier];
+    if (!newVariant) return json({ error: 'target_variant_not_found' }, 422);
+
+    // Step 2: Remove current main line item
+    const removeRes = await sealApi(env, '/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({ id: sealId, action: 'remove_items', remove_items: [mainItem.id] }),
+    });
+    if (!removeRes.ok) {
+      console.error('Seal remove_items error:', await removeRes.text());
+      return json({ error: 'seal_remove_failed' }, 502);
+    }
+
+    // Step 3: Add new line item for target interval + same tier
+    const addRes = await sealApi(env, '/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({
+        id: sealId,
+        action: 'add_items',
+        add_items: [{
+          product_id: newVariant.product_id,
+          variant_id: newVariant.variant_id,
+          quantity: '1',
+          title: newVariant.title,
+          price: newVariant.price,
+          taxable: 0,
+          requires_shipping: 0,
+          one_time: 0,
+        }],
+      }),
+    });
+    if (!addRes.ok) {
+      console.error('Seal add_items error:', await addRes.text());
+      return json({ error: 'seal_add_failed' }, 502);
+    }
+
+    // Step 4: Update billing interval
+    const intervalEdit = SEAL_INTERVAL_EDIT[target_interval];
+    const editRes = await sealApi(env, '/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({ id: sealId, action: 'edit', edit: intervalEdit }),
+    });
+    if (!editRes.ok) {
+      console.error('Seal edit interval error:', await editRes.text());
+      return json({ error: 'seal_edit_failed' }, 502);
+    }
+
+    // WF6 (subscription/updated webhook) will sync Supabase automatically
+    return json({ ok: true, new_interval: target_interval, new_price: newVariant.price, new_title: newVariant.title });
   }
 
   return json({ error: 'unknown_action' }, 400);

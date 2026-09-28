@@ -33,7 +33,7 @@ export async function onRequestGet(context) {
     return json({ authenticated: false });
   }
 
-  if (!session || !session.mobile || !session.stripe_customer_id) {
+  if (!session || !session.mobile) {
     return json({ authenticated: false });
   }
 
