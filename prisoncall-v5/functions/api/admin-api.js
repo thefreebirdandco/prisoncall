@@ -235,7 +235,7 @@ export async function onRequest({ request, env }) {
       // ── Fulfilment (delegates to n8n WF1b — no Supabase write here) ──
       case 'fulfil-subscriber': {
         await requireAuth();
-        const { seal_subscription_id, did, customer_name, customer_email, customer_mobile, prison_name } = params;
+        const { seal_subscription_id, did, customer_name, customer_email, assigned_mobile, prison_name } = params;
 
         if (!seal_subscription_id || !did) {
           return json({ error: 'seal_subscription_id and did are required' }, 400);
@@ -256,7 +256,7 @@ export async function onRequest({ request, env }) {
             did: didClean,
             customer_name:   customer_name   || '',
             customer_email:  customer_email  || '',
-            customer_mobile: customer_mobile || '',
+            assigned_mobile: assigned_mobile || '',
             prison_name:     prison_name     || '',
           }),
         });
