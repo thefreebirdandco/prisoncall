@@ -11,7 +11,7 @@ async function querySupabase(env, mobile) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null;
 
   const res = await fetch(
-    SUPABASE_URL + '/rest/v1/subscriptions?customer_mobile=eq.'
+    SUPABASE_URL + '/rest/v1/subscriptions?assigned_mobile=eq.'
     + encodeURIComponent(mobile) + '&status=eq.ACTIVE&limit=1',
     {
       headers: {

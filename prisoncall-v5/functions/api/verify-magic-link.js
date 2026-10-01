@@ -143,7 +143,7 @@ export async function onRequestGet(context) {
   // Look up customer in subscriptions
   const mobile = link.mobile;
   const subRes = await sb(
-    `subscriptions?customer_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=stripe_customer_id,customer_email,customer_mobile`
+    `subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=stripe_customer_id,customer_email,assigned_mobile`
   );
   let stripeCustomerId = '';
   let email = '';

@@ -41,7 +41,7 @@ export async function onRequestPost(context) {
       SUPABASE_URL +
         '/rest/v1/subscriptions?current_did=eq.' +
         encodeURIComponent(did) +
-        '&status=eq.ACTIVE&select=customer_mobile&limit=1',
+        '&status=eq.ACTIVE&select=assigned_mobile&limit=1',
       {
         headers: {
           Authorization: 'Bearer ' + SUPABASE_KEY,
@@ -60,7 +60,7 @@ export async function onRequestPost(context) {
       return jsonResponse({ success: false });
     }
 
-    const storedMobile = (rows[0].customer_mobile || '').replace(/\D/g, '');
+    const storedMobile = (rows[0].assigned_mobile || '').replace(/\D/g, '');
     return jsonResponse({ success: storedMobile === mobile });
   } catch {
     return jsonResponse({ success: false });

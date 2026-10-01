@@ -39,7 +39,7 @@ export async function onRequestPost(context) {
 
   // Look up mobile in subscriptions
   const subRes = await sb(
-    `subscriptions?customer_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=id,customer_mobile`
+    `subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=id,assigned_mobile`
   );
   if (!subRes.ok) {
     return json({ error: 'db_error' }, 500);
