@@ -458,5 +458,46 @@ export async function onRequestPost(context) {
     return json({ ok: true, new_interval: target_interval, new_price: newVariant.price, new_title: newVariant.title });
   }
 
+  // ─── pay-now ──────────────────────────────────────────────────────────────────
+  if (action === 'pay-now') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+
+    const { seal_subscription_id } = body;
+    if (!seal_subscription_id) return json({ error: 'missing_fields' }, 400);
+
+    // Fetch subscription from Supabase — verify ownership and status server-side
+    const subRes = await sb(
+      `subscriptions?seal_subscription_id=eq.${encodeURIComponent(seal_subscription_id)}&select=assigned_mobile,status,latest_billing_attempt_id&limit=1`
+    );
+    if (!subRes.ok) return json({ error: 'db_error' }, 500);
+    const subData = await subRes.json();
+    const sub = Array.isArray(subData) ? subData[0] : null;
+
+    if (!sub || sub.assigned_mobile !== session.mobile) return json({ ok: false, error: 'Not found' }, 404);
+    if (sub.status !== 'SUSPENDED') return json({ ok: false, error: 'Subscription is not suspended' }, 400);
+
+    // Call Seal subscription-process-charge — billing_attempt_id read from Supabase, not from client
+    const sealRes = await fetch(
+      `https://seal-subscriptions.com/api/v1/subscriptions/${seal_subscription_id}/subscription-process-charge`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Seal-Api-Token': env.SEAL_API_TOKEN,
+        },
+        body: JSON.stringify({ billing_attempt_id: sub.latest_billing_attempt_id || '' }),
+      }
+    );
+
+    if (!sealRes.ok) {
+      const errText = await sealRes.text().catch(() => '');
+      console.error('Seal process-charge error', sealRes.status, errText);
+      return json({ ok: false, error: `Payment processor error (${sealRes.status})` }, 502);
+    }
+
+    return json({ ok: true });
+  }
+
   return json({ error: 'unknown_action' }, 400);
 }

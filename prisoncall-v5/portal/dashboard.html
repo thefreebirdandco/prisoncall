@@ -409,9 +409,10 @@
       }
       if (s === 'SUSPENDED') {
         return [
-          '<button class="btn btn--black btn--full update-payment-link" data-sub-id="' + id + '">Update Payment Method</button>',
-          '<div style="display:flex;justify-content:flex-start;align-items:center;margin-top:4px;">',
+          '<button class="btn btn--black btn--full pay-now-btn" data-sub-id="' + id + '" data-subscription-id="' + PortalAuth.esc(sub.seal_subscription_id || '') + '">Pay Now</button>',
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">',
             '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
+            '<button class="update-payment-link" data-sub-id="' + id + '" style="background:none;border:none;color:#888;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;min-height:44px;">Update Payment Method</button>',
           '</div>',
         ].join('');
       }
@@ -522,6 +523,43 @@
             .catch(function () {
               self.textContent = origText;
               self.disabled = false;
+              showCardMsg(subId, 'Network error. Please try again.', 'error');
+              setTimeout(function () { clearCardMsg(subId); }, 6000);
+            });
+        });
+      });
+      /* Pay Now (SUSPENDED cards only) */
+      document.querySelectorAll('.pay-now-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var sealSubId = this.dataset.subscriptionId;
+          var subId = this.dataset.subId;
+          var self = this;
+          var origText = self.textContent;
+          self.disabled = true;
+          self.textContent = 'Processing\u2026';
+          fetch('/api/portal-supabase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'pay-now', seal_subscription_id: sealSubId }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                self.textContent = 'Payment submitted \u2014 we\'ll notify you when restored.';
+                self.style.backgroundColor = '#22c55e';
+                self.style.color = '#fff';
+                self.style.borderColor = '#22c55e';
+                self.disabled = true;
+              } else {
+                self.disabled = false;
+                self.textContent = origText;
+                showCardMsg(subId, data.error || 'Payment failed. Please try again.', 'error');
+                setTimeout(function () { clearCardMsg(subId); }, 6000);
+              }
+            })
+            .catch(function () {
+              self.disabled = false;
+              self.textContent = origText;
               showCardMsg(subId, 'Network error. Please try again.', 'error');
               setTimeout(function () { clearCardMsg(subId); }, 6000);
             });
