@@ -140,11 +140,20 @@
       { key: 'halfyearly',  label: 'Half-Yearly', interval: 'every 6 months'},
     ];
 
-    /* ─── Format mobile as 04XX XXX XXX ─── */
+    /* ─── Format mobile as 04XX XXX XXX — handles E.164 no-plus (61xxxxxxxxxx) too ─── */
     function fmtMobile(raw) {
       var d = (raw || '').replace(/\D/g, '');
+      if (d.length === 11 && d.slice(0, 2) === '61') d = '0' + d.slice(2);
       if (d.length !== 10) return raw || '';
       return d.slice(0, 4) + ' ' + d.slice(4, 7) + ' ' + d.slice(7);
+    }
+
+    /* ─── Format DID as 0X XXXX XXXX — handles E.164 no-plus (61xxxxxxxxxx) ─── */
+    function fmtDid(raw) {
+      var d = (raw || '').replace(/\D/g, '');
+      if (d.length === 11 && d.slice(0, 2) === '61') d = '0' + d.slice(2);
+      if (d.length !== 10) return raw || '';
+      return d.slice(0, 2) + ' ' + d.slice(2, 6) + ' ' + d.slice(6);
     }
 
     /* ─── Authenticated header CTAs — green "Add a plan" pill ─── */
@@ -166,18 +175,101 @@
       }
     }
 
+    /* ─── Check URL for ?action param BEFORE auth ─── */
+    /* Stored in sessionStorage so it survives a login redirect                */
+    (function checkUrlAction() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('action') === 'update-payment') {
+          sessionStorage.setItem('pendingAction', 'update-payment');
+        }
+      } catch (e) {}
+    })();
+
     /* ─── Init ─── */
     (function init() {
       PortalAuth.checkSession(
         function (data) {
           updateAuthHeader();
-          loadSubscriptions();
+          var pending = sessionStorage.getItem('pendingAction');
+          if (pending === 'update-payment') {
+            sessionStorage.removeItem('pendingAction');
+            showUpdatePaymentScreen();
+          } else {
+            loadSubscriptions();
+          }
         },
         function () {
           window.location.replace('/portal/login.html');
         }
       );
     })();
+
+    /* ─── Update-payment dedicated screen (?action=update-payment flow) ─── */
+    function showUpdatePaymentScreen() {
+      document.getElementById('loadingState').hidden = true;
+      document.getElementById('dashContent').hidden = false;
+      document.getElementById('subCards').innerHTML = [
+        '<div style="max-width:480px;margin:40px auto 64px;text-align:center;padding:0 8px;">',
+          '<h2 style="font-size:22px;font-weight:700;color:#101010;margin-bottom:12px;font-family:inherit;">Update Payment Method</h2>',
+          '<p style="font-size:15px;color:#666;line-height:1.6;margin-bottom:28px;">Click below and we\'ll email you a secure link to update your payment details.</p>',
+          '<button id="upmBtn" class="btn btn--black" style="width:100%;max-width:400px;">Send me a payment update link</button>',
+          '<p id="upmMsg" style="margin-top:16px;font-size:14px;min-height:20px;"></p>',
+        '</div>',
+      ].join('');
+
+      fetch('/api/portal-supabase?action=get-subscriptions')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var candidates = (Array.isArray(data) ? data : []).filter(function (s) {
+            return s.status === 'ACTIVE' || s.status === 'SUSPENDED';
+          });
+          var btn = document.getElementById('upmBtn');
+          var msg = document.getElementById('upmMsg');
+          if (!btn) return;
+
+          if (!candidates.length) {
+            btn.disabled = true;
+            if (msg) { msg.textContent = 'No active subscription found.'; msg.style.color = '#666'; }
+            return;
+          }
+
+          var subId = candidates[0].id;
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Sending\u2026';
+            fetch('/api/portal-supabase', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'update-payment-method', subscription_id: subId }),
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                if (d.ok) {
+                  btn.style.display = 'none';
+                  if (msg) {
+                    msg.textContent = 'Done \u2014 check your email for the secure link.';
+                    msg.style.color = '#1a5c33';
+                    msg.style.fontWeight = '600';
+                  }
+                } else {
+                  btn.disabled = false;
+                  btn.textContent = 'Send me a payment update link';
+                  if (msg) { msg.textContent = 'Something went wrong. Please try again.'; msg.style.color = '#c0392b'; }
+                }
+              })
+              .catch(function () {
+                btn.disabled = false;
+                btn.textContent = 'Send me a payment update link';
+                if (msg) { msg.textContent = 'Something went wrong. Please try again.'; msg.style.color = '#c0392b'; }
+              });
+          });
+        })
+        .catch(function () {
+          var btn = document.getElementById('upmBtn');
+          if (btn) { btn.disabled = true; btn.textContent = 'Unable to load account'; }
+        });
+    }
 
     /* ─── Load subscriptions ─── */
     function loadSubscriptions() {
@@ -266,15 +358,15 @@
         return '<span class="pc-did--registering">Registering</span>';
       }
       if (s === 'ACTIVE') {
-        return '<span class="pc-did--active">' + PortalAuth.esc(PortalAuth.formatDid(did)) + '</span>';
+        return '<span class="pc-did--active">' + PortalAuth.esc(fmtDid(did)) + '</span>';
       }
       if (s === 'SUSPENDED') {
-        return '<span class="pc-did--muted">' + PortalAuth.esc(PortalAuth.formatDid(did)) + '</span>';
+        return '<span class="pc-did--muted">' + PortalAuth.esc(fmtDid(did)) + '</span>';
       }
       if (s === 'CANCELLED' || s === 'CANCELLATION_PENDING') {
         return '<span class="pc-did--released">Number released</span>';
       }
-      return '<span>' + PortalAuth.esc(PortalAuth.formatDid(did)) + '</span>';
+      return '<span>' + PortalAuth.esc(fmtDid(did)) + '</span>';
     }
 
     /* ─── Add-on badges ─── */
@@ -307,15 +399,20 @@
       var id = sub.id;
       if (s === 'ACTIVE') {
         return [
-          '<button class="btn btn--black btn--full transfer-btn" data-sub-id="' + id + '">Transfer Prison</button>',
-          '<button class="btn btn--outline btn--full change-plan-btn" data-sub-id="' + id + '">Change Plan</button>',
-          '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
+          '<button class="btn btn--black btn--full change-plan-btn" data-sub-id="' + id + '">Change Plan</button>',
+          '<button class="btn btn--outline btn--full transfer-btn" data-sub-id="' + id + '">Transfer Prison</button>',
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">',
+            '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
+            '<button class="update-payment-link" data-sub-id="' + id + '" style="background:none;border:none;color:#888;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;min-height:44px;">Update Payment Method</button>',
+          '</div>',
         ].join('');
       }
       if (s === 'SUSPENDED') {
         return [
-          '<button class="btn btn--outline btn--full payment-update-btn" data-sub-id="' + id + '">Update payment method</button>',
-          '<p class="payment-stub" id="pay-stub-' + id + '">Payment update coming soon. Please contact support.</p>',
+          '<button class="btn btn--black btn--full update-payment-link" data-sub-id="' + id + '">Update Payment Method</button>',
+          '<div style="display:flex;justify-content:flex-start;align-items:center;margin-top:4px;">',
+            '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
+          '</div>',
         ].join('');
       }
       if (s === 'PENDING' || s === 'DID_ORDERED' || s === 'ACTIVATING') {
@@ -396,13 +493,14 @@
           openCancelOverlay(this.dataset.subId);
         });
       });
-      /* Payment update */
-      document.querySelectorAll('.payment-update-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
+      /* Update Payment Method (text link on ACTIVE card + primary button on SUSPENDED card) */
+      document.querySelectorAll('.update-payment-link').forEach(function (el) {
+        el.addEventListener('click', function () {
           var subId = this.dataset.subId;
           var self = this;
+          var origText = self.textContent;
           self.disabled = true;
-          self.textContent = 'Sending…';
+          self.textContent = 'Sending\u2026';
           fetch('/api/portal-supabase', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -411,17 +509,20 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
               if (data.ok) {
-                showCardMsg(subId, data.message || 'Payment update link sent. Check your email.', 'success');
+                self.textContent = 'Done \u2014 check your email for the secure link.';
+                self.style.color = '#1a5c33';
+                self.disabled = true;
               } else {
-                showCardMsg(subId, 'Could not send update link. Please try again.', 'error');
+                self.textContent = origText;
+                self.disabled = false;
+                showCardMsg(subId, 'Something went wrong. Please try again.', 'error');
+                setTimeout(function () { clearCardMsg(subId); }, 6000);
               }
             })
             .catch(function () {
-              showCardMsg(subId, 'Network error. Please try again.', 'error');
-            })
-            .finally(function () {
+              self.textContent = origText;
               self.disabled = false;
-              self.textContent = 'Update Payment Method';
+              showCardMsg(subId, 'Network error. Please try again.', 'error');
               setTimeout(function () { clearCardMsg(subId); }, 6000);
             });
         });
@@ -772,7 +873,7 @@
       if (!sub) return;
 
       cancelSubId = subId;
-      var did = PortalAuth.formatDid(sub.current_did);
+      var did = fmtDid(sub.current_did);
       var nextBill = PortalAuth.formatDate(sub.next_billing_date);
 
       document.getElementById('cancelBody').textContent =
@@ -818,7 +919,7 @@
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (!data.success) throw new Error(data.error || 'error');
+          if (!data.ok) throw new Error(data.error || 'error');
           document.getElementById('cancelOverlay').hidden = true;
           cancelSubId = null;
           updateSubStatus(subId, 'CANCELLATION_PENDING');
