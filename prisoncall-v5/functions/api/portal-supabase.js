@@ -475,7 +475,7 @@ export async function onRequestPost(context) {
     const sub = Array.isArray(subData) ? subData[0] : null;
 
     if (!sub || sub.assigned_mobile !== session.mobile) return json({ ok: false, error: 'Not found' }, 404);
-    if (sub.status !== 'SUSPENDED') return json({ ok: false, error: 'Subscription is not suspended' }, 400);
+    if (sub.status !== 'PAUSED') return json({ ok: false, error: 'Subscription is not paused' }, 400);
 
     // Call Seal subscription-process-charge — billing_attempt_id read from Supabase, not from client
     const sealRes = await fetch(

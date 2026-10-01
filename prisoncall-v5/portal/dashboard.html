@@ -222,7 +222,7 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           var candidates = (Array.isArray(data) ? data : []).filter(function (s) {
-            return s.status === 'ACTIVE' || s.status === 'SUSPENDED';
+            return s.status === 'ACTIVE' || s.status === 'PAUSED';
           });
           var btn = document.getElementById('upmBtn');
           var msg = document.getElementById('upmMsg');
@@ -311,7 +311,7 @@
 
       // Load Seal billing data for each subscription card
       subs.forEach(function (sub) {
-        if (sub.status !== 'ACTIVE' && sub.status !== 'SUSPENDED') return;
+        if (sub.status !== 'ACTIVE' && sub.status !== 'PAUSED') return;
         fetch('/api/portal-supabase', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -343,7 +343,7 @@
         TRANSFER_PENDING:     { cls: 'badge--blue',   text: 'Transfer in progress' },
         CANCELLATION_PENDING: { cls: 'badge--grey',   text: 'Cancelled' },
         ACTIVE:               { cls: 'badge--active', text: 'Active' },
-        SUSPENDED:            { cls: 'badge--red',    text: 'Payment overdue' },
+        PAUSED:               { cls: 'badge--red',    text: 'Payment overdue' },
         CANCELLED:            { cls: 'badge--grey',   text: 'Cancelled' },
       };
       var b = map[status] || { cls: 'badge--grey', text: status };
@@ -360,7 +360,7 @@
       if (s === 'ACTIVE') {
         return '<span class="pc-did--active">' + PortalAuth.esc(fmtDid(did)) + '</span>';
       }
-      if (s === 'SUSPENDED') {
+      if (s === 'PAUSED') {
         return '<span class="pc-did--muted">' + PortalAuth.esc(fmtDid(did)) + '</span>';
       }
       if (s === 'CANCELLED' || s === 'CANCELLATION_PENDING') {
@@ -407,7 +407,7 @@
           '</div>',
         ].join('');
       }
-      if (s === 'SUSPENDED') {
+      if (s === 'PAUSED') {
         return [
           '<button class="btn btn--black btn--full pay-now-btn" data-sub-id="' + id + '" data-subscription-id="' + PortalAuth.esc(sub.seal_subscription_id || '') + '">Pay Now</button>',
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">',
@@ -425,7 +425,7 @@
     /* ─── Render a single card ─── */
     function renderCard(sub, activeCount) {
       var isBundled = activeCount >= 2 && sub.status === 'ACTIVE';
-      var hasActions = (sub.status === 'ACTIVE' || sub.status === 'SUSPENDED' ||
+      var hasActions = (sub.status === 'ACTIVE' || sub.status === 'PAUSED' ||
                         sub.status === 'PENDING' || sub.status === 'DID_ORDERED' ||
                         sub.status === 'ACTIVATING');
       var nextBill = (sub.status !== 'CANCELLED')
@@ -494,7 +494,7 @@
           openCancelOverlay(this.dataset.subId);
         });
       });
-      /* Update Payment Method (text link on ACTIVE card + primary button on SUSPENDED card) */
+      /* Update Payment Method (text link on ACTIVE card + primary button on PAUSED card) */
       document.querySelectorAll('.update-payment-link').forEach(function (el) {
         el.addEventListener('click', function () {
           var subId = this.dataset.subId;
@@ -528,7 +528,7 @@
             });
         });
       });
-      /* Pay Now (SUSPENDED cards only) */
+      /* Pay Now (PAUSED cards only) */
       document.querySelectorAll('.pay-now-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var sealSubId = this.dataset.subscriptionId;
