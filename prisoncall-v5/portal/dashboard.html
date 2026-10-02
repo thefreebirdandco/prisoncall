@@ -10,6 +10,45 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/portal/portal.css">
+  <style>
+    /* ─── Dashboard overrides ─── */
+    /* Cancel Plan link: grey, not red — red stays in the confirm overlay only */
+    .cancel-link { color: #666666; }
+
+    /* Transfer policy info tooltip */
+    .info-tooltip-link {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      color: #666666;
+      text-decoration: none;
+      line-height: 1;
+      margin-left: 6px;
+    }
+    .info-tooltip-link::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000000;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      padding: 4px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 10;
+    }
+    .info-tooltip-link:hover::after,
+    .info-tooltip-link:focus::after {
+      opacity: 1;
+    }
+  </style>
 </head>
 <body>
 
@@ -393,6 +432,23 @@
       return map[(key || '').toLowerCase()] || key || '-';
     }
 
+    /* ─── Full Shopify/Seal product title from Supabase add-on flags ─── */
+    function getProductTitle(sub) {
+      var base = { fortnightly: 'Fortnightly Plan', monthly: 'Monthly Plan', halfyearly: 'Half Yearly Plan' }[(sub.plan_interval || '').toLowerCase()];
+      if (!base) return null;
+      if (sub.addon_combo23)      return base + ' + Combo (Transfer & Renewal) Guarantee';
+      if (sub.addon_transfers)    return base + ' + Transfer Guarantee';
+      if (sub.addon_post_renewal) return base + ' + Renewal Guarantee';
+      return base;
+    }
+
+    /* ─── Price-per-period label for the plan row sub-line ─── */
+    function getPriceLabel(sub) {
+      var price = parseFloat(sub.plan_price || 0).toFixed(2);
+      var period = { fortnightly: 'fortnight', monthly: 'month', halfyearly: '6 months' }[(sub.plan_interval || '').toLowerCase()] || sub.plan_interval || '';
+      return '$' + price + ' / ' + period;
+    }
+
     /* ─── Card actions HTML ─── */
     function cardActions(sub) {
       var s = sub.status;
@@ -432,6 +488,10 @@
         ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val" id="next-billing-' + sub.id + '">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
         : '';
       var price = parseFloat(sub.plan_price || 0).toFixed(2);
+      var _prodTitle = getProductTitle(sub);
+      var _planDisplay = _prodTitle
+        ? '<span class="pc-val" id="plan-title-' + sub.id + '">' + PortalAuth.esc(_prodTitle) + '<br><span style="font-size:12px;color:var(--color-muted);">' + PortalAuth.esc(getPriceLabel(sub)) + '</span></span>'
+        : '<span class="pc-val" id="plan-title-' + sub.id + '">' + PortalAuth.esc(intervalLabel(sub.plan_interval)) + ' \u2014 $' + price + '</span>';
 
       return [
         '<div class="pc-card" data-sub-id="' + sub.id + '" data-status="' + PortalAuth.esc(sub.status) + '" data-did="' + PortalAuth.esc(sub.current_did || '') + '">',
@@ -456,7 +516,7 @@
             '</div>',
             '<div class="pc-row">',
               '<span class="pc-key">Plan</span>',
-              '<span class="pc-val">' + PortalAuth.esc(intervalLabel(sub.plan_interval)) + ' - $' + price + '</span>',
+              _planDisplay,
             '</div>',
             nextBill,
             addonBadges(sub),
@@ -622,6 +682,13 @@
        TRANSFER PRISON FLOW
     ════════════════════════════════════════ */
 
+    /* ─── Transfer Protection check ─── */
+    function hasTransferProtection(title) {
+      if (!title) return false;
+      var t = title.toLowerCase();
+      return t.indexOf('transfer') !== -1 || t.indexOf('combo') !== -1;
+    }
+
     function openTransferPanel(subId) {
       var panel = document.getElementById('transfer-' + subId);
       if (!panel) return;
@@ -638,7 +705,7 @@
         '<div class="panel-inner">',
           '<p class="panel-title">',
             'Transfer to a new prison',
-            ' <a class="panel-info-link" href="/transfer-policy.html" target="_blank" rel="noopener noreferrer"><img src="/assets/icons/feature_icons/Icon_Tooltip_Black.svg" alt="" width="16" height="16"></a>',
+            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
           '</p>',
           '<div class="state-pills">',
             '<button class="state-pill" data-state="VIC">Victoria</button>',
@@ -684,16 +751,21 @@
                PortalAuth.esc(p.prison_name) + '">' + PortalAuth.esc(p.prison_name) + '</button>';
       }).join('');
 
+      var tpNotice = hasTransferProtection(getProductTitle(sub))
+        ? '<div style="background:#E6FAF0;border-radius:8px;padding:10px 14px;font-size:14px;color:#000000;margin-bottom:16px;">Your plan includes free transfer \u2014 no charge applies.</div>'
+        : '<div style="background:#F2F6F0;border-radius:8px;padding:10px 14px;font-size:14px;color:#000000;margin-bottom:16px;">A transfer fee of $24.99 applies to your plan. Submit your request and our team will arrange payment before processing your transfer.</div>';
+
       panel.innerHTML = [
         '<div class="panel-inner">',
           '<p class="panel-title">',
             'Transfer to a new prison',
-            ' <a class="panel-info-link" href="/transfer-policy.html" target="_blank" rel="noopener noreferrer"><img src="/assets/icons/feature_icons/Icon_Tooltip_Black.svg" alt="" width="16" height="16"></a>',
+            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
           '</p>',
           '<div class="state-pills">',
             '<button class="state-pill' + (state === 'VIC' ? ' selected' : '') + '" data-state="VIC">Victoria</button>',
             '<button class="state-pill' + (state === 'NSW' ? ' selected' : '') + '" data-state="NSW">New South Wales</button>',
           '</div>',
+          tpNotice,
           '<div class="prison-grid" id="prisonGrid-' + subId + '">',
             pills || '<p class="panel-subtext">No prisons found for this state.</p>',
           '</div>',
@@ -736,7 +808,7 @@
         '<div class="panel-inner">',
           '<p class="panel-title">',
             'Transfer to a new prison',
-            ' <a class="panel-info-link" href="/transfer-policy.html" target="_blank" rel="noopener noreferrer"><img src="/assets/icons/feature_icons/Icon_Tooltip_Black.svg" alt="" width="16" height="16"></a>',
+            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
           '</p>',
           '<div class="confirm-block">',
             '<p class="confirm-block__text">',
