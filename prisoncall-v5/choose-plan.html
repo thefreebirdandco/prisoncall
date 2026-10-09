@@ -383,6 +383,26 @@
     .plan-card__badge--black { background: var(--color-green); color: var(--color-black); }
     /* Dark badge variant (Short Term) — black background, white text */
     .plan-card__badge--dark { background: #101010; color: #fff; }
+    /* Warn badge variant (Unprotected) — amber background */
+    .plan-card__badge--warn { background: #F59E0B; color: #101010; }
+
+    /* Step 4 — live total summary block */
+    .step4-total-summary {
+      margin: 20px 0 8px; padding: 16px 20px;
+      background: #f9f9f7; border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .step4-total__header {
+      font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #101010;
+    }
+    .step4-total__line {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 14px; color: #555; margin-bottom: 6px; gap: 12px;
+    }
+    .step4-total__line--once { color: #101010; font-weight: 600; }
+    .step4-total__line--once em {
+      font-style: normal; font-size: 11px; color: #888; font-weight: 400;
+    }
 
     .plan-card__plan-name {
       font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
@@ -1734,7 +1754,7 @@
       var s4 = planFlow ? planFlow.querySelector('[data-step="4"]') : null;
       if (s4) {
         if (ok) {
-          var newS4 = buildStep4El(null);
+          var newS4 = buildStep4El(step4ExpandedKey || 'monthly');
           s4.parentNode.replaceChild(newS4, s4);
           wireStep4(newS4);
         } else {
@@ -1861,10 +1881,10 @@
   var step4CustomiseMode = false;
 
   /* Single add-on: Lifetime Bundle only. */
-  var selectedAddons    = { lifetimeAll: false };
+  var selectedAddons    = { lifetimeAll: true }; /* LP pre-selected by default */
 
   function defaultSelectedAddons() {
-    return { lifetimeAll: false };
+    return { lifetimeAll: true }; /* LP pre-selected by default */
   }
 
   
@@ -2198,11 +2218,11 @@
         var s4 = getStepEl(4);
         if(s4){ scrollToEl(s4, true); return; }
         removeStepsFrom(4);
-        s4 = buildStep4El(null);
+        selectedAddons = defaultSelectedAddons(); /* ensure LP pre-selected */
+        s4 = buildStep4El('monthly'); /* always start in expanded/confirmed mode */
         planFlow.appendChild(s4);
         wireStep4(s4);
         scrollToEl(s4, true);
-        snapCarouselToKey(s4, 'monthly');
       });
     }
 
@@ -2410,47 +2430,39 @@
     var lp        = getLpPrice();
     var barePrice = getBasePlanPrice(pk);
 
-    var lpSelected    = !!selectedAddons.lifetimeAll;
-    var lpRowCls      = 'addon-row' + (lpSelected ? ' is-selected' : '');
-    var lpBadgeCls    = 'addon-lp-badge' + (lpSelected ? '' : ' is-pulsing');
-    var valueStackCls = 'addon-value-stack' + (lpSelected ? '' : ' hidden');
+    var lpSelected = !!selectedAddons.lifetimeAll;
+    var lpRowCls   = 'addon-row' + (lpSelected ? ' is-selected' : '');
+    var lpBadgeCls = 'addon-lp-badge' + (lpSelected ? '' : ' is-pulsing');
 
     return [
       '<div class="plan-card__protect" id="planCardProtect">',
         '<p class="plan-card__protect-heading">Protect your plan</p>',
         '<div class="addon-table">',
 
-          /* LP row — Lifetime Bundle */
+          /* LP row — Lifetime Bundle (no info tooltip; bullets always visible below) */
           '<div class="' + lpRowCls + '" data-addon="lifetimeAll" role="checkbox" aria-checked="' + lpSelected + '" tabindex="0">',
             '<div class="addon-checkbox">' + TICK_SVG + '</div>',
             '<div class="addon-row__content">',
               '<span class="' + lpBadgeCls + '">LIFETIME DEAL</span>',
               '<div class="addon-row__name-row">',
                 '<p class="addon-row__name">Lifetime Protection + free CG</p>',
-                '<button type="button" class="addon-info-btn" data-info-toggle="lp" aria-label="More info about Lifetime Protection" aria-expanded="false">i</button>',
               '</div>',
               '<div class="addon-row__price-line">',
                 '<span class="addon-row__price">$' + lp.toFixed(2) + ' once</span>',
                 '<span class="addon-lp-desc">Pay once. Covered for life.</span>',
               '</div>',
-              '<div class="addon-detail-panel" id="addon-detail-lp">',
-                '<ul class="addon-detail-list">',
-                  '<li>48hr Cancellation Guarantee included free</li>',
-                  '<li>Transfer + Renewal Protection included for life</li>',
-                  '<li>Your plan price stays at $' + barePrice.toFixed(2) + '/' + intv + ' forever</li>',
-                '</ul>',
-              '</div>',
             '</div>',
           '</div>',
 
-          /* Value stack — visible when LP selected */
-          '<div class="' + valueStackCls + '" id="addon-value-stack">',
+          /* Value stack — always visible (bullets always expanded, no tooltip needed) */
+          '<div class="addon-value-stack" id="addon-value-stack">',
             '<ul class="addon-value-list">',
               '<li><span class="addon-value-check">&#10003;</span> 48hr Cancellation Guarantee - free</li>',
               '<li><span class="addon-value-check">&#10003;</span> Transfer Protection - for life</li>',
               '<li><span class="addon-value-check">&#10003;</span> Renewal Protection - for life</li>',
+              '<li><span class="addon-value-check">&#10003;</span> Your plan price stays at $' + barePrice.toFixed(2) + '/' + intv + ' forever</li>',
             '</ul>',
-            '<p class="addon-covered-copy">You are fully covered. Nothing to worry about.</p>',
+            (lpSelected ? '<p class="addon-covered-copy">You are fully covered. Nothing to worry about.</p>' : ''),
           '</div>',
 
         '</div>',
@@ -2458,6 +2470,29 @@
     ].join('');
   }
 
+
+  /* ─── Step 4 live total summary ─── */
+  function buildStep4TotalHtml() {
+    if (!PRICING) return '';
+    var planPrice = getBasePlanPrice('monthly');
+    var lpPrice   = getLpPrice();
+    if (selectedAddons.lifetimeAll) {
+      var total = (planPrice + lpPrice).toFixed(2);
+      return [
+        '<div class="step4-total__header">Today\'s total: <strong>$' + total + '</strong></div>',
+        '<div class="step4-total__line"><span>Prisoncall Plan</span><span>$' + planPrice.toFixed(2) + '/month</span></div>',
+        '<div class="step4-total__line step4-total__line--once">',
+          '<span>Lifetime Protection <em>(one-time, never charged again)</em></span>',
+          '<span>$' + lpPrice.toFixed(2) + ' once</span>',
+        '</div>'
+      ].join('');
+    } else {
+      return [
+        '<div class="step4-total__header">Today\'s total: <strong>$' + planPrice.toFixed(2) + '/month</strong></div>',
+        '<div class="step4-total__line"><span>Prisoncall Plan</span><span>$' + planPrice.toFixed(2) + '/month</span></div>'
+      ].join('');
+    }
+  }
 
   function buildStep4El(expandedKey){
     /* expandedKey: null = Phase A; plan key = Phase B expanded.
@@ -2499,7 +2534,14 @@
         }
 
         var badgeHtml;
-        if(p.badge){
+        if (isExpanded) {
+          /* Dynamic badge for confirmed card: green when LP on, amber when off */
+          if (selectedAddons.lifetimeAll) {
+            badgeHtml = '<span class="plan-card__badge plan-card__badge--black" data-plan-badge>Most Popular</span>';
+          } else {
+            badgeHtml = '<span class="plan-card__badge plan-card__badge--warn" data-plan-badge>\u26A0 UNPROTECTED</span>';
+          }
+        } else if(p.badge){
           var bCls = 'plan-card__badge' + (p.badgeCls ? ' plan-card__'+p.badgeCls : '');
           badgeHtml = '<span class="'+bCls+'">'+p.badge+'</span>';
         } else {
@@ -2535,18 +2577,17 @@
         if (isExpanded) cardClasses += ' is-expanded is-selected';
         if (isBlurred) cardClasses += ' is-blurred' + blurSide;
 
-        var changeLink = isExpanded
-          ? '<button type="button" class="plan-card__change" data-change-plan>&larr; Choose different plan</button>'
-          : '';
+        /* No change-plan link — single plan, read-only confirmed card */
+        var changeLink = '';
 
         var bodyInner = isExpanded
           ? buildInCardProtectHtml(p.key)
           : '<ul class="plan-card__features">'+featHtml+'</ul>';
 
-        var selectLabel = isFeatured ? 'Choose Plan' : 'Select plan';
+        /* Phase A select button removed — card is read-only display; Continue always shown when expanded */
         var footerInner = isExpanded
           ? '<button class="plan-card__continue" type="button" data-plan-continue>Continue &rarr;</button>'
-          : '<button class="plan-card__select" type="button">'+selectLabel+'</button>';
+          : '';
 
         var scrollOpen = isExpanded ? '<div class="plan-card__scroll">' : '';
         var scrollClose = isExpanded ? '</div>' : '';
@@ -2576,12 +2617,14 @@
     }
 
     var gridCls = 'plans-grid' + (isExpandedMode ? ' is-expanded-mode' : '');
+    var totalSummaryHtml = (isExpandedMode && PRICING) ? buildStep4TotalHtml() : '';
     var el = document.createElement('section');
     el.className = 'step-section'; el.dataset.step = '4';
     el.innerHTML = [
       '<p class="step-eyebrow">Step 4 of 4</p>',
-      '<h2 class="step-heading">Choose your plan</h2>',
+      '<h2 class="step-heading">Confirm your plan</h2>',
       '<div class="'+gridCls+'" role="list">'+cardsHtml+'</div>',
+      (totalSummaryHtml ? '<div class="step4-total-summary" id="step4-total-summary">'+totalSummaryHtml+'</div>' : ''),
       '<button class="step-back step-back--bottom" type="button" data-back="4">'+BACK_SVG+' Step 3</button>'
     ].join('');
     return el;
@@ -2941,6 +2984,22 @@
       tmp.innerHTML = buildProtectStatusHtml(planKey);
       statusWrap.parentNode.replaceChild(tmp.firstChild, statusWrap);
     }
+
+    /* Update badge: green Most Popular when LP on, amber UNPROTECTED when off */
+    var badgeEl = card.querySelector('[data-plan-badge]');
+    if (badgeEl) {
+      if (selectedAddons.lifetimeAll) {
+        badgeEl.className = 'plan-card__badge plan-card__badge--black';
+        badgeEl.textContent = 'Most Popular';
+      } else {
+        badgeEl.className = 'plan-card__badge plan-card__badge--warn';
+        badgeEl.textContent = '\u26A0 UNPROTECTED';
+      }
+    }
+
+    /* Update live total summary below the grid */
+    var summaryEl = stepEl.querySelector('#step4-total-summary');
+    if (summaryEl) summaryEl.innerHTML = buildStep4TotalHtml();
   }
 
   function applyAddonGreyState(protectEl) {
@@ -4155,6 +4214,57 @@ function renderCompletedArea(){
       localStorage.removeItem('prisoncall_checkout_state');
     }
     startNewPlan(getUrlState(), getUrlPrison());
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     DEV PANEL — inject only on staging domain (prisoncall.pages.dev).
+     Never appears on prisoncall.com.au or any other domain.
+     Remove this entire IIFE at integration.
+  ═══════════════════════════════════════════════════════════════════════ */
+  (function(){
+    if(window.location.hostname !== 'prisoncall.pages.dev') return;
+    var panel = document.createElement('div');
+    panel.className = 'dev-panel';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', 'Developer tools');
+    panel.innerHTML = [
+      '<p class="dev-panel__title">Dev Tools</p>',
+      '<div class="dev-panel__row">',
+        '<span class="dev-panel__label">OTP Verify</span>',
+        '<label class="dev-toggle" aria-label="Toggle OTP Verify">',
+          '<input type="checkbox" id="devToggleOTP">',
+          '<span class="dev-toggle__track"></span>',
+        '</label>',
+      '</div>',
+      '<button class="dev-panel__btn" id="devSkipToStep4" type="button">Skip to Step 4</button>'
+    ].join('');
+    document.body.appendChild(panel);
+    /* Wire toggle to DEV_FLAGS — updates take effect immediately */
+    document.getElementById('devToggleOTP').addEventListener('change', function(){
+      DEV_FLAGS.OTP = this.checked;
+    });
+    document.getElementById('devSkipToStep4').addEventListener('click', function(){
+      entries = [];
+      selectedAddons = defaultSelectedAddons();
+      cur = { id: nextId++, state: 'vic', prison: 'Melbourne Assessment Prison', mobile: '0400000001', planKey: null };
+      editId = null;
+      clearGate();
+      planFlow.innerHTML = '';
+      renderCompletedArea();
+      var s1 = buildStep1El('vic');
+      planFlow.appendChild(s1);
+      wireStep1(s1);
+      var s2 = buildStep2El('vic', 'Melbourne Assessment Prison');
+      planFlow.appendChild(s2);
+      wireStep2(s2);
+      var s3 = buildStep3El('0400000001');
+      planFlow.appendChild(s3);
+      wireStep3(s3);
+      var s4 = buildStep4El('monthly');
+      planFlow.appendChild(s4);
+      wireStep4(s4);
+      scrollToEl(s4, true);
+    });
   }());
 
   </script>
