@@ -277,7 +277,7 @@ export async function onRequestPost(context) {
   // ── dev-bypass ───────────────────────────────────────────────────────────
   if (action === 'dev-bypass') {
     const sb2 = makeSb(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-    const activeRes = await sb2(`subscriptions?status=eq.ACTIVE&limit=1&select=assigned_mobile,stripe_customer_id,customer_email`);
+    const activeRes = await sb2(`subscriptions?status=eq.ACTIVE&limit=1&select=assigned_mobile,seal_subscription_id,customer_email`);
     let sessionPayload;
 
     if (activeRes.ok) {
@@ -286,7 +286,7 @@ export async function onRequestPost(context) {
         const row = rows[0];
         sessionPayload = JSON.stringify({
           mobile: row.assigned_mobile,
-          stripe_customer_id: row.stripe_customer_id || '',
+          seal_subscription_id: row.seal_subscription_id || '',
           email: row.customer_email || '',
         });
       }
@@ -295,7 +295,7 @@ export async function onRequestPost(context) {
     if (!sessionPayload) {
       sessionPayload = JSON.stringify({
         mobile: '0400000001',
-        stripe_customer_id: 'cus_test',
+        seal_subscription_id: '',
         email: 'test@prisoncall.com.au',
       });
     }

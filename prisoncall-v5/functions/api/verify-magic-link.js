@@ -143,19 +143,19 @@ export async function onRequestGet(context) {
   // Look up customer in subscriptions
   const mobile = link.mobile;
   const subRes = await sb(
-    `subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=stripe_customer_id,customer_email,assigned_mobile`
+    `subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=seal_subscription_id,customer_email,assigned_mobile`
   );
-  let stripeCustomerId = '';
+  let sealSubscriptionId = '';
   let email = '';
   if (subRes.ok) {
     const subRows = await subRes.json();
     if (subRows.length) {
-      stripeCustomerId = subRows[0].stripe_customer_id || '';
+      sealSubscriptionId = subRows[0].seal_subscription_id || '';
       email = subRows[0].customer_email || '';
     }
   }
 
-  const sessionPayload = JSON.stringify({ mobile, stripe_customer_id: stripeCustomerId, email });
+  const sessionPayload = JSON.stringify({ mobile, seal_subscription_id: sealSubscriptionId, email });
   const cookieHeader = [
     `pc_session=${encodeURIComponent(sessionPayload)}`,
     'HttpOnly',
