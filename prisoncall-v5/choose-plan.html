@@ -665,7 +665,7 @@
         display: flex;
         flex-direction: column;
         transform: none !important;
-        overflow: visible !important;
+        overflow: hidden !important;
         box-shadow: none;
       }
       .plan-card.is-expanded .plan-card__scroll {
@@ -2010,6 +2010,7 @@
   var addonPreselect = (function(){ try { return new URLSearchParams(window.location.search).get('addon'); } catch(e){ return null; } }());
   var addonAutoSelectFn = null; /* set by wireAddonSection to expose autoSelectLifetime */
   var addonToastEvalFn  = null; /* set by wireInCardAddons to re-fire toasts on edit re-entry */
+  var lpShakeInterval   = null; /* repeating shake interval while LP checkbox is unchecked */
 
   /* â”€â”€â”€ Scroll gating â€” prevents scrolling back above the active step â”€â”€â”€ */
   var gateY      = 0;
@@ -2480,29 +2481,6 @@
   }
 
 
-  /* ─── Step 4 live total summary ─── */
-  function buildStep4TotalHtml() {
-    if (!PRICING) return '';
-    var planPrice = getBasePlanPrice('monthly');
-    var lpPrice   = getLpPrice();
-    if (selectedAddons.lifetimeAll) {
-      var total = (planPrice + lpPrice).toFixed(2);
-      return [
-        '<div class="step4-total__header">Today\'s total: <strong>$' + total + '</strong></div>',
-        '<div class="step4-total__line"><span>Prisoncall Plan</span><span>$' + planPrice.toFixed(2) + '/month</span></div>',
-        '<div class="step4-total__line step4-total__line--once">',
-          '<span>Lifetime Protection <em>(one-time, never charged again)</em></span>',
-          '<span>$' + lpPrice.toFixed(2) + ' once</span>',
-        '</div>'
-      ].join('');
-    } else {
-      return [
-        '<div class="step4-total__header">Today\'s total: <strong>$' + planPrice.toFixed(2) + '/month</strong></div>',
-        '<div class="step4-total__line"><span>Prisoncall Plan</span><span>$' + planPrice.toFixed(2) + '/month</span></div>'
-      ].join('');
-    }
-  }
-
   function buildStep4El(expandedKey){
     /* expandedKey: null = Phase A; plan key = Phase B expanded.
        When editing, pass entry.planKey to open already expanded. */
@@ -2625,14 +2603,12 @@
     }
 
     var gridCls = 'plans-grid' + (isExpandedMode ? ' is-expanded-mode' : '');
-    var totalSummaryHtml = (isExpandedMode && PRICING) ? buildStep4TotalHtml() : '';
     var el = document.createElement('section');
     el.className = 'step-section'; el.dataset.step = '4';
     el.innerHTML = [
       '<p class="step-eyebrow">Step 4 of 4</p>',
       '<h2 class="step-heading">Confirm your plan</h2>',
       '<div class="'+gridCls+'" role="list">'+cardsHtml+'</div>',
-      (totalSummaryHtml ? '<div class="step4-total-summary" id="step4-total-summary">'+totalSummaryHtml+'</div>' : ''),
       '<button class="step-back step-back--bottom" type="button" data-back="4">'+BACK_SVG+' Step 3</button>'
     ].join('');
     return el;
@@ -3005,9 +2981,6 @@
       }
     }
 
-    /* Update live total summary below the grid */
-    var summaryEl = stepEl.querySelector('#step4-total-summary');
-    if (summaryEl) summaryEl.innerHTML = buildStep4TotalHtml();
   }
 
   function applyAddonGreyState(protectEl) {
@@ -3254,7 +3227,8 @@
     function selectLifetime(checked) {
       if (checked) {
         dismissAllToasts();
-        /* Move to State 3: LP selected, all other addons cleared */
+        /* Move to State 3: LP selected — stop any shake interval */
+        if (lpShakeInterval) { clearInterval(lpShakeInterval); lpShakeInterval = null; }
         selectedAddons.lifetimeAll = true;
         selectedAddons.combo23     = false;
         selectedAddons.addon1      = false;
@@ -3276,15 +3250,23 @@
         protectEl.parentNode.replaceChild(_np2, protectEl);
         protectEl = _np2;
         wireInCardAddons(stepEl, protectEl);
-        /* Shake the checkbox once to draw attention to the unprotected state */
-        var _lpRow = protectEl.querySelector('[data-addon="lifetimeAll"]');
-        var _chk   = _lpRow ? _lpRow.querySelector('.addon-checkbox') : null;
-        if (_chk) {
-          _chk.classList.add('addon-checkbox--shake');
-          _chk.addEventListener('animationend', function() {
-            _chk.classList.remove('addon-checkbox--shake');
+        /* Shake immediately, then every 4 s while unchecked — only one interval at a time */
+        if (lpShakeInterval) { clearInterval(lpShakeInterval); lpShakeInterval = null; }
+        function fireShake() {
+          var _r = document.querySelector('[data-addon="lifetimeAll"]');
+          var _c = _r ? _r.querySelector('.addon-checkbox') : null;
+          if (!_c || selectedAddons.lifetimeAll) {
+            clearInterval(lpShakeInterval); lpShakeInterval = null; return;
+          }
+          _c.classList.remove('addon-checkbox--shake');
+          void _c.offsetWidth; /* force reflow so the animation restarts cleanly */
+          _c.classList.add('addon-checkbox--shake');
+          _c.addEventListener('animationend', function() {
+            _c.classList.remove('addon-checkbox--shake');
           }, { once: true });
         }
+        fireShake();
+        lpShakeInterval = setInterval(fireShake, 4000);
       }
       updateLivePriceDisplay(stepEl);
     }
