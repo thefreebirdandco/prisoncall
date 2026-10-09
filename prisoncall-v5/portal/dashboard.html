@@ -48,6 +48,27 @@
     .info-tooltip-link:focus::after {
       opacity: 1;
     }
+
+    /* ─── Add Protection modal overlay ─── */
+    #addProtectionModal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #addProtectionModal[hidden] { display: none !important; }
+    #addProtectionModal .ap-modal-card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 32px 24px;
+      max-width: 440px;
+      width: calc(100% - 32px);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -111,8 +132,8 @@
   </div>
 
   <!-- ═══ ADD PROTECTION MODAL (global) ═══ -->
-  <div id="addProtectionModal" class="cancel-overlay" hidden aria-modal="true" role="dialog">
-    <div class="cancel-overlay__inner">
+  <div id="addProtectionModal" hidden aria-modal="true" role="dialog">
+    <div class="ap-modal-card">
       <h2 class="cancel-overlay__title">Lifetime Protection</h2>
       <ul style="list-style:none;padding:0;margin:0 0 20px;text-align:left;">
         <li style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:15px;font-weight:500;">
