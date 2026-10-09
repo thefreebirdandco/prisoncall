@@ -102,19 +102,22 @@
     /* ─── Validate mobile ─── */
     function getMobileDigits() {
       var d = mobileInput.value.replace(/\D/g, '');
-      /* Defensive normalisation in case autocomplete bypassed the input event */
+      /* 1. Normalise E.164 autocomplete: 61XXXXXXXXX → 04XXXXXXXXX */
       if (d.length === 11 && d.slice(0, 2) === '61') d = '0' + d.slice(2);
+      /* 2. Convert local 04XXXXXXXXX → E.164 61XXXXXXXXX (matches Supabase storage) */
+      if (d.length === 10 && d.charAt(0) === '0') d = '61' + d.slice(1);
       return d;
     }
 
     function isValidMobile(digits) {
-      return /^04\d{8}$/.test(digits);
+      return /^61\d{9}$/.test(digits); /* E.164 no-plus, 11 digits */
     }
 
     /* ─── Form submit ─── */
     loginForm.addEventListener('submit', function (e) {
       e.preventDefault();
       var digits = getMobileDigits();
+      console.log('[login] submitting mobile (E.164):', digits);
 
       if (!isValidMobile(digits)) {
         mobileInput.classList.add('is-error');

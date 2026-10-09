@@ -33,11 +33,12 @@ export async function onRequestPost(context) {
 
   const mobile = (body.mobile || '').replace(/\D/g, '');
 
-  if (!/^04\d{8}$/.test(mobile)) {
+  /* Accept E.164 no-plus (61XXXXXXXXX — 11 digits) — matches Supabase assigned_mobile storage format */
+  if (!/^61\d{9}$/.test(mobile)) {
     return json({ error: 'invalid_mobile' }, 400);
   }
 
-  // Look up mobile in subscriptions
+  // Look up mobile in subscriptions (assigned_mobile stored as E.164 no-plus)
   const subRes = await sb(
     `subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&limit=1&select=id,assigned_mobile`
   );
