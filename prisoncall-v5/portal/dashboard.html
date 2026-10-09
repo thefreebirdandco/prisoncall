@@ -465,7 +465,11 @@
 
           '<div class="pc-card__top" id="top-' + sub.id + '">',
             statusBadge(sub.status),
-            (sub.status === 'ACTIVE' && sub.has_lifetime_protection) ? '<span class="badge badge--green-dark">Lifetime Protection</span>' : '',
+            sub.status === 'ACTIVE'
+              ? (sub.has_lifetime_protection
+                  ? '<span class="badge badge--green-dark">Lifetime Protection</span>'
+                  : '<span class="badge" style="background:#F59E0B;color:#101010;">\u26A0 Unprotected</span>')
+              : '',
             isBundled ? '<span class="badge badge--green-dark">10% bundle discount active</span>' : '',
           '</div>',
 
