@@ -1086,6 +1086,19 @@
     }
     .addon-row:hover { border-color: #bbb; }
     .addon-row.is-selected { border-color: var(--color-black); }
+    /* LP row: amber border when unchecked (unprotected state) */
+    .addon-row[data-addon="lifetimeAll"]:not(.is-selected) { border-color: #F59E0B; }
+    /* Checkbox shake — triggered once on uncheck */
+    @keyframes lpCheckboxShake {
+      0%   { transform: translateX(0); }
+      15%  { transform: translateX(-3px); }
+      35%  { transform: translateX(3px); }
+      55%  { transform: translateX(-3px); }
+      75%  { transform: translateX(3px); }
+      90%  { transform: translateX(-1px); }
+      100% { transform: translateX(0); }
+    }
+    .addon-checkbox--shake { animation: lpCheckboxShake 400ms ease-in-out; }
     .addon-row.is-combo { background: #f8f7f5; border-style: dashed; border-color: #aaa; }
     .addon-row.is-combo.is-selected { border-style: solid; border-color: var(--color-black); }
     .addon-row.is-greyed {
@@ -3263,6 +3276,15 @@
         protectEl.parentNode.replaceChild(_np2, protectEl);
         protectEl = _np2;
         wireInCardAddons(stepEl, protectEl);
+        /* Shake the checkbox once to draw attention to the unprotected state */
+        var _lpRow = protectEl.querySelector('[data-addon="lifetimeAll"]');
+        var _chk   = _lpRow ? _lpRow.querySelector('.addon-checkbox') : null;
+        if (_chk) {
+          _chk.classList.add('addon-checkbox--shake');
+          _chk.addEventListener('animationend', function() {
+            _chk.classList.remove('addon-checkbox--shake');
+          }, { once: true });
+        }
       }
       updateLivePriceDisplay(stepEl);
     }
