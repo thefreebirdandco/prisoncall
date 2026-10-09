@@ -24,6 +24,9 @@ const PRODUCTS_QUERY = `
         price {
           amount
         }
+        product {
+          title
+        }
       }
     }
   }
@@ -41,11 +44,15 @@ function parseAmount(node) {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildPricing(priceById) {
+function buildPricing(priceById, titleById) {
   const p = function (id) {
     const v = priceById[id];
     if (v == null) throw new Error('Missing Shopify price for variant ' + id);
     return v;
+  };
+  /* Use Shopify product title if available; fall back to safe defaults */
+  const t = function (id, fallback) {
+    return (titleById && titleById[id]) || fallback;
   };
 
   const monthlyPrice  = p('54535955382551');
@@ -56,12 +63,12 @@ function buildPricing(priceById) {
       monthly: {
         price: monthlyPrice,
         interval: 'month',
-        label: 'Monthly',
+        label: t('54535955382551', 'Monthly'),
       },
     },
     addons: {
       lifetime: {
-        label: 'Lifetime Bundle',
+        label: t('54535991394583', 'Lifetime Protection'),
         type: 'one-time',
         price: lifetimePrice,
       },
@@ -130,18 +137,20 @@ export async function onRequestGet(context) {
 
     const nodes = (json.data && json.data.nodes) || [];
     const priceById = {};
+    const titleById = {};
     nodes.forEach(function (node) {
       if (!node) return;
       const id = numericId(node.id);
       const amount = parseAmount(node);
       if (id && amount != null) priceById[id] = amount;
+      if (id && node.product && node.product.title) titleById[id] = node.product.title;
     });
 
     console.log('[products] Parsed variant prices:', Object.keys(priceById).length, 'of', VARIANT_IDS.length);
 
     let pricing;
     try {
-      pricing = buildPricing(priceById);
+      pricing = buildPricing(priceById, titleById);
     } catch (mapErr) {
       console.error('[products] Mapping error:', mapErr && mapErr.message);
       return new Response(JSON.stringify({ error: mapErr.message || 'Failed to map Shopify prices' }), {

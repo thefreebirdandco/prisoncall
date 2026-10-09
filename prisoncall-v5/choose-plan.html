@@ -3849,7 +3849,8 @@
     function addonLine(label, price, suffix) {
       return '<div class="summary-line__addon"><span class="summary-line__addon-name">' + label + '</span><span class="summary-line__addon-price">$' + price + suffix + '</span></div>';
     }
-    return '<div class="summary-line__addons">' + addonLine('Lifetime Bundle', getLpPrice().toFixed(2), ' once') + '</div>';
+    var lpLabel = (PRICING && PRICING.addons && PRICING.addons.lifetime && PRICING.addons.lifetime.label) || 'Lifetime Protection';
+    return '<div class="summary-line__addons">' + addonLine(lpLabel, getLpPrice().toFixed(2), ' once') + '</div>';
   }
 
   /* === BUNDLE DISCOUNT MODAL === */
