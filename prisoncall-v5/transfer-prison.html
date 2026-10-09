@@ -586,6 +586,7 @@
     confirmedMobile: null,  /* clean 10-digit after OTP verify */
     transferState:   null,  /* Step 4A toggle state for new prison list */
     newPrison:       null,  /* chosen in Step 4A */
+    sealSubId:       null,  /* from URL ?sub_id= — included in submit payload */
   };
 
   var devSkipStep3 = false;
@@ -1279,12 +1280,13 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          did:            state.currentDID,
-          currentPrison:  state.currentPrison,
-          newPrison:      state.newPrison,
-          newPrisonState: state.transferState || state.didState,
-          mobile:         state.confirmedMobile,
-          currentState:   state.currentState || state.didState,
+          did:                  state.currentDID,
+          currentPrison:        state.currentPrison,
+          newPrison:            state.newPrison,
+          newPrisonState:       state.transferState || state.didState,
+          mobile:               state.confirmedMobile,
+          currentState:         state.currentState || state.didState,
+          seal_subscription_id: state.sealSubId || null,
         })
       })
       .then(function(r){ return r.json(); })
@@ -1361,6 +1363,48 @@
   var s1 = buildStep1El();
   tpFlow.appendChild(s1);
   wireStep1(s1);
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     URL PARAMS — pre-fill from ?did=&state=&sub_id= and auto-advance
+     Used when redirected from the dashboard Transfer Prison modal.
+  ═══════════════════════════════════════════════════════════════════════ */
+  (function initFromUrl() {
+    try {
+      var params   = new URLSearchParams(window.location.search);
+      var urlDid   = (params.get('did')   || '').replace(/\D/g, '');
+      var urlState = (params.get('state') || '').toLowerCase();
+      var urlSubId = params.get('sub_id') || '';
+
+      if (urlSubId) state.sealSubId = urlSubId;
+
+      /* Normalise E.164 to local (61XXXXXXXXX → 0XXXXXXXXX) */
+      if (urlDid.length === 11 && urlDid.slice(0, 2) === '61') urlDid = '0' + urlDid.slice(1);
+
+      /* Infer state from DID prefix when not explicitly provided */
+      if (!urlState && urlDid.length === 10) {
+        if (urlDid.slice(0, 2) === '03') urlState = 'vic';
+        else if (urlDid.slice(0, 2) === '02') urlState = 'nsw';
+      }
+
+      /* Click the matching state button */
+      if (urlState === 'vic' || urlState === 'nsw') {
+        var stateBtn = s1.querySelector('[data-sv="' + urlState + '"]');
+        if (stateBtn) stateBtn.click();
+      }
+
+      /* Pre-fill DID suffix and auto-submit Step 1 */
+      if (urlDid.length === 10) {
+        var suffix = urlDid.slice(2); /* 8-digit suffix, prefix stripped */
+        var inpEl  = s1.querySelector('#s1DidInp');
+        if (inpEl) {
+          inpEl.value = suffix.slice(0, 4) + ' ' + suffix.slice(4);
+          /* Auto-advance after a brief tick so state button click has settled */
+          var contEl = s1.querySelector('#s1Cont');
+          if (contEl) setTimeout(function () { contEl.click(); }, 100);
+        }
+      }
+    } catch (_) {}
+  }());
 
   </script>
 </body>

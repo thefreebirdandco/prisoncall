@@ -137,6 +137,27 @@
       width: 100%;
       padding: 6px 0;
     }
+
+    /* ─── Transfer modal overlay ─── */
+    #transferModal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #transferModal[hidden] { display: none !important; }
+    #transferModal .ap-modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      border: 2px solid #101010;
+      max-width: 440px;
+      width: calc(100% - 32px);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -218,7 +239,7 @@
             <span class="ap-price-note">Pay once. Covered for life.</span>
           </div>
           <div class="ap-bullet"><span class="ap-bullet-check">&#10003;</span>48hr Cancellation Guarantee</div>
-          <div class="ap-bullet"><span class="ap-bullet-check">&#10003;</span>Transfer Protection</div>
+          <div class="ap-bullet"><span class="ap-bullet-check">&#10003;</span>free transfers</div>
           <div class="ap-bullet"><span class="ap-bullet-check">&#10003;</span>Renewal Protection</div>
         </div>
 
@@ -253,6 +274,38 @@
         <button class="btn btn--danger btn--full" id="confirmCancelBtn" disabled>Cancel My Plan</button>
         <button class="btn btn--outline btn--full" id="keepPlanBtn">Keep My Plan</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ TRANSFER MODAL (global) ═══ -->
+  <div id="transferModal" hidden aria-modal="true" role="dialog">
+    <div class="ap-modal-card">
+
+      <!-- Black header -->
+      <div class="ap-modal-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Prison Transfer Request</h2>
+        <button id="closeTransferModalBtn" style="background:none;border:none;color:#ffffff;font-size:1.5rem;cursor:pointer;line-height:1;padding:0;">&#x2715;</button>
+      </div>
+
+      <!-- White body -->
+      <div class="ap-modal-body">
+        <p style="font-size:15px;color:#101010;margin-bottom:0;">A $24.99 transfer fee applies to your account.</p>
+
+        <!-- Upsell box -->
+        <div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-top:16px;">
+          <p style="font-weight:700;font-size:14px;color:#101010;margin-bottom:6px;">Upgrade to Lifetime Protection</p>
+          <p style="font-size:14px;color:#101010;margin-bottom:10px;">$19.99 once</p>
+          <div style="display:flex;align-items:flex-start;gap:5px;font-size:13px;color:#101010;margin-bottom:6px;"><span style="font-weight:700;">&#10003;</span>Free transfers</div>
+          <div style="display:flex;align-items:flex-start;gap:5px;font-size:13px;color:#101010;margin-bottom:10px;"><span style="font-weight:700;">&#10003;</span>Renewal Protection included</div>
+          <p style="font-size:12px;color:#666666;margin:0;">Cheaper than one transfer fee.</p>
+        </div>
+
+        <!-- CTAs -->
+        <button class="btn btn--black btn--full" id="transferLpBtn" style="margin-top:20px;">Get Lifetime Protection &#8212; $19.99</button>
+        <button class="btn btn--outline btn--full" id="transferFeeBtn" style="margin-top:8px;">Pay transfer fee &#8212; $24.99</button>
+        <p id="transferModalError" style="margin-top:8px;font-size:13px;color:#c0392b;min-height:18px;text-align:center;"></p>
+      </div>
+
     </div>
   </div>
 
@@ -294,6 +347,8 @@
     /* ─── Global state ─── */
     var subs = [];
     var cancelSubId = null;
+    var activeAddProtectionSubId = null;
+    var activeTransferSubId = null;
 
     /* ─── Format mobile as 04XX XXX XXX — handles E.164 no-plus (61xxxxxxxxxx) too ─── */
     function fmtMobile(raw) {
@@ -546,12 +601,15 @@
       var s = sub.status;
       var id = sub.id;
       if (s === 'ACTIVE') {
-        var tpParam    = sub.has_lifetime_protection ? '1' : '0';
         var didParam   = encodeURIComponent(sub.current_did || '');
         var stateParam = encodeURIComponent(sub.prison_state || '');
-        var parts = [
-          '<a href="/transfer-prison?did=' + didParam + '&state=' + stateParam + '&protected=' + tpParam + '" class="btn btn--outline btn--full">Transfer Prison</a>',
-        ];
+        var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
+        var parts = [];
+        if (sub.has_lifetime_protection) {
+          parts.push('<a href="/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=1" class="btn btn--outline btn--full">Transfer Prison</a>');
+        } else {
+          parts.push('<button class="btn btn--outline btn--full tp-transfer-btn" data-sub-id="' + id + '">Transfer Prison</button>');
+        }
         if (!sub.has_lifetime_protection) {
           parts.push('<button class="btn btn--black btn--full add-protection-btn" data-sub-id="' + id + '" style="margin-top:8px;">Add Protection</button>');
         }
@@ -632,7 +690,14 @@
       /* Add Protection */
       document.querySelectorAll('.add-protection-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
+          activeAddProtectionSubId = this.dataset.subId;
           openAddProtectionModal();
+        });
+      });
+      /* Transfer Prison (unprotected customers — shows modal) */
+      document.querySelectorAll('.tp-transfer-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openTransferModal(this.dataset.subId);
         });
       });
       /* Cancel Plan */
@@ -830,8 +895,22 @@
       document.getElementById('addProtectionModal').hidden = false;
     }
 
+    function openTransferModal(subId) {
+      activeTransferSubId = subId;
+      document.getElementById('transferModalError').textContent = '';
+      var lpBtn  = document.getElementById('transferLpBtn');
+      var feeBtn = document.getElementById('transferFeeBtn');
+      if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+      if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+      document.getElementById('transferModal').hidden = false;
+    }
+
     document.getElementById('cancelAddProtectionBtn').addEventListener('click', function () {
       document.getElementById('addProtectionModal').hidden = true;
+    });
+
+    document.getElementById('closeTransferModalBtn').addEventListener('click', function () {
+      document.getElementById('transferModal').hidden = true;
     });
 
     document.getElementById('confirmAddProtectionBtn').addEventListener('click', function () {
@@ -840,19 +919,22 @@
       btn.innerHTML = '<span class="spinner spinner--sm"></span>';
       document.getElementById('addProtectionError').textContent = '';
 
+      var sub = subs.find(function (s) { return String(s.id) === String(activeAddProtectionSubId); });
+      var assignedMobile = sub ? (sub.assigned_mobile || '') : '';
+
       fetch('/api/shopify-cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lineItems: [{ merchandiseId: 'gid://shopify/ProductVariant/54535991394583', quantity: 1 }],
-          attributes: [],
-          discountCodes: [],
+          variant_id:      '54535991394583',
+          assigned_mobile: assignedMobile,
+          redirect_after:  window.location.href,
         }),
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.success && data.checkoutUrl) {
-            window.location.href = data.checkoutUrl;
+          if (data.checkout_url) {
+            window.location.href = data.checkout_url;
           } else {
             btn.disabled = false;
             btn.textContent = 'Add Protection';
@@ -864,6 +946,67 @@
           btn.textContent = 'Add Protection';
           document.getElementById('addProtectionError').textContent = 'Network error. Please try again.';
         });
+    });
+
+    /* ════════════════════════════════════════
+       TRANSFER MODAL — LP upsell + fee payment
+    ════════════════════════════════════════ */
+
+    function doTransferCartCheckout(variantId, redirectAfter) {
+      var sub = subs.find(function (s) { return String(s.id) === String(activeTransferSubId); });
+      var assignedMobile = sub ? (sub.assigned_mobile || '') : '';
+      var lpBtn  = document.getElementById('transferLpBtn');
+      var feeBtn = document.getElementById('transferFeeBtn');
+      var errEl  = document.getElementById('transferModalError');
+
+      if (lpBtn)  { lpBtn.disabled  = true; lpBtn.textContent  = 'Processing\u2026'; }
+      if (feeBtn) { feeBtn.disabled = true; feeBtn.textContent = 'Processing\u2026'; }
+      if (errEl)  { errEl.textContent = ''; }
+
+      fetch('/api/shopify-cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant_id:      variantId,
+          assigned_mobile: assignedMobile,
+          redirect_after:  redirectAfter,
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+          } else {
+            if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+            if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+            if (errEl)  { errEl.textContent = data.error || 'Something went wrong. Please try again.'; }
+          }
+        })
+        .catch(function () {
+          if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+          if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+          if (errEl)  { errEl.textContent = 'Network error. Please try again.'; }
+        });
+    }
+
+    document.getElementById('transferLpBtn').addEventListener('click', function () {
+      var sub = subs.find(function (s) { return String(s.id) === String(activeTransferSubId); });
+      if (!sub) return;
+      var didParam   = encodeURIComponent(sub.current_did || '');
+      var stateParam = encodeURIComponent(sub.prison_state || '');
+      var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
+      var redirectAfter = window.location.origin + '/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=1';
+      doTransferCartCheckout('54535991394583', redirectAfter);
+    });
+
+    document.getElementById('transferFeeBtn').addEventListener('click', function () {
+      var sub = subs.find(function (s) { return String(s.id) === String(activeTransferSubId); });
+      if (!sub) return;
+      var didParam   = encodeURIComponent(sub.current_did || '');
+      var stateParam = encodeURIComponent(sub.prison_state || '');
+      var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
+      var redirectAfter = window.location.origin + '/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=0';
+      doTransferCartCheckout('67658171515159', redirectAfter);
     });
 
     /* ─── Sign out ─── */

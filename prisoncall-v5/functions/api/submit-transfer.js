@@ -83,7 +83,7 @@ export async function onRequestPost(context) {
     new_prison_name:  newPrison,
     new_prison_state: newPrisonState || null,
     assigned_mobile:  mobile,
-    status:           'PENDING',
+    status:           'PENDING_VOIPLINE',
   };
 
   try {
