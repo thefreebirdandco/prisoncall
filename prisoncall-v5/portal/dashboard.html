@@ -173,11 +173,6 @@
     /* ─── Global state ─── */
     var subs = [];
     var cancelSubId = null;
-    var PLAN_OPTIONS = [
-      { key: 'fortnightly', label: 'Fortnightly', interval: 'every 2 weeks' },
-      { key: 'monthly',     label: 'Monthly',     interval: 'every month'   },
-      { key: 'halfyearly',  label: 'Half-Yearly', interval: 'every 6 months'},
-    ];
 
     /* ─── Format mobile as 04XX XXX XXX — handles E.164 no-plus (61xxxxxxxxxx) too ─── */
     function fmtMobile(raw) {
@@ -426,37 +421,16 @@
       return html ? '<div class="pc-addon-row">' + html + '</div>' : '';
     }
 
-    /* ─── Plan interval label ─── */
-    function intervalLabel(key) {
-      var map = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly', annual: 'Annual' };
-      return map[(key || '').toLowerCase()] || key || '-';
-    }
-
-    /* ─── Full Shopify/Seal product title from Supabase add-on flags ─── */
-    function getProductTitle(sub) {
-      var base = { fortnightly: 'Fortnightly Plan', monthly: 'Monthly Plan', halfyearly: 'Half Yearly Plan' }[(sub.plan_interval || '').toLowerCase()];
-      if (!base) return null;
-      if (sub.addon_combo23)      return base + ' + Combo (Transfer & Renewal) Guarantee';
-      if (sub.addon_transfers)    return base + ' + Transfer Guarantee';
-      if (sub.addon_post_renewal) return base + ' + Renewal Guarantee';
-      return base;
-    }
-
-    /* ─── Price-per-period label for the plan row sub-line ─── */
-    function getPriceLabel(sub) {
-      var price = parseFloat(sub.plan_price || 0).toFixed(2);
-      var period = { fortnightly: 'fortnight', monthly: 'month', halfyearly: '6 months' }[(sub.plan_interval || '').toLowerCase()] || sub.plan_interval || '';
-      return '$' + price + ' / ' + period;
-    }
-
     /* ─── Card actions HTML ─── */
     function cardActions(sub) {
       var s = sub.status;
       var id = sub.id;
       if (s === 'ACTIVE') {
+        var tpParam    = sub.has_lifetime_protection ? '1' : '0';
+        var didParam   = encodeURIComponent(sub.current_did || '');
+        var stateParam = encodeURIComponent(sub.prison_state || '');
         return [
-          '<button class="btn btn--black btn--full change-plan-btn" data-sub-id="' + id + '">Change Plan</button>',
-          '<button class="btn btn--outline btn--full transfer-btn" data-sub-id="' + id + '">Transfer Prison</button>',
+          '<a href="/transfer-prison?did=' + didParam + '&state=' + stateParam + '&protected=' + tpParam + '" class="btn btn--outline btn--full">Transfer Prison</a>',
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">',
             '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
             '<button class="update-payment-link" data-sub-id="' + id + '" style="background:none;border:none;color:#888;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;min-height:44px;">Update Payment Method</button>',
@@ -487,11 +461,7 @@
       var nextBill = (sub.status !== 'CANCELLED')
         ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val" id="next-billing-' + sub.id + '">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
         : '';
-      var price = parseFloat(sub.plan_price || 0).toFixed(2);
-      var _prodTitle = getProductTitle(sub);
-      var _planDisplay = _prodTitle
-        ? '<span class="pc-val" id="plan-title-' + sub.id + '">' + PortalAuth.esc(_prodTitle) + '<br><span style="font-size:12px;color:var(--color-muted);">' + PortalAuth.esc(getPriceLabel(sub)) + '</span></span>'
-        : '<span class="pc-val" id="plan-title-' + sub.id + '">' + PortalAuth.esc(intervalLabel(sub.plan_interval)) + ' \u2014 $' + price + '</span>';
+      var _planDisplay = '<span class="pc-val">Prisoncall Plan \u2014 $49.99/month</span>';
 
       return [
         '<div class="pc-card" data-sub-id="' + sub.id + '" data-status="' + PortalAuth.esc(sub.status) + '" data-did="' + PortalAuth.esc(sub.current_did || '') + '">',
@@ -526,8 +496,6 @@
             ? '<div class="pc-card__actions" id="actions-' + sub.id + '">' + cardActions(sub) + '</div>'
             : '',
 
-          '<div class="inline-panel" id="transfer-' + sub.id + '"></div>',
-          '<div class="inline-panel" id="change-plan-' + sub.id + '"></div>',
           '<div class="card-message" id="msg-' + sub.id + '"></div>',
 
         '</div>',
@@ -536,18 +504,6 @@
 
     /* ─── Wire all card buttons ─── */
     function wireAllCards() {
-      /* Transfer Prison */
-      document.querySelectorAll('.transfer-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          openTransferPanel(this.dataset.subId);
-        });
-      });
-      /* Change Plan */
-      document.querySelectorAll('.change-plan-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          openChangePlanPanel(this.dataset.subId);
-        });
-      });
       /* Cancel Plan */
       document.querySelectorAll('.cancel-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -627,25 +583,6 @@
       });
     }
 
-    /* ─── Helpers: close / open panels ─── */
-    function closePanelEl(el) {
-      el.classList.remove('is-open');
-      setTimeout(function () { el.innerHTML = ''; }, 210);
-    }
-
-    function closeAllPanels(exceptId) {
-      document.querySelectorAll('.inline-panel').forEach(function (p) {
-        if (p.id !== exceptId) closePanelEl(p);
-      });
-    }
-
-    function openPanel(el, html) {
-      el.innerHTML = html;
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () { el.classList.add('is-open'); });
-      });
-    }
-
     function showCardMsg(subId, text, type) {
       var el = document.getElementById('msg-' + subId);
       if (!el) return;
@@ -675,302 +612,6 @@
       if (actionsEl && sub) {
         actionsEl.innerHTML = cardActions(sub);
         wireAllCards();
-      }
-    }
-
-    /* ════════════════════════════════════════
-       TRANSFER PRISON FLOW
-    ════════════════════════════════════════ */
-
-    /* ─── Transfer Protection check ─── */
-    function hasTransferProtection(title) {
-      if (!title) return false;
-      var t = title.toLowerCase();
-      return t.indexOf('transfer') !== -1 || t.indexOf('combo') !== -1;
-    }
-
-    function openTransferPanel(subId) {
-      var panel = document.getElementById('transfer-' + subId);
-      if (!panel) return;
-
-      clearCardMsg(subId);
-
-      if (panel.classList.contains('is-open')) {
-        closePanelEl(panel);
-        return;
-      }
-      closeAllPanels('transfer-' + subId);
-
-      openPanel(panel, [
-        '<div class="panel-inner">',
-          '<p class="panel-title">',
-            'Transfer to a new prison',
-            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
-          '</p>',
-          '<div class="state-pills">',
-            '<button class="state-pill" data-state="VIC">Victoria</button>',
-            '<button class="state-pill" data-state="NSW">New South Wales</button>',
-          '</div>',
-        '</div>',
-      ].join(''));
-
-      /* Scroll panel into view once the is-open class has been applied */
-      setTimeout(function () {
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-
-      panel.querySelectorAll('[data-state]').forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          var state = this.dataset.state;
-          clearCardMsg(subId);
-          panel.querySelectorAll('.state-pill').forEach(function (p) {
-            p.classList.toggle('selected', p.dataset.state === state);
-          });
-          panel.querySelector('.panel-inner').innerHTML = [
-            '<div class="panel-loading"><div class="spinner spinner--sm"></div> Loading prisons...</div>',
-          ].join('');
-
-          fetch('/api/portal-supabase?action=get-prisons&state=' + encodeURIComponent(state))
-            .then(function (r) { return r.json(); })
-            .then(function (prisons) {
-              showTransferPrisonGrid(panel, subId, state, prisons);
-            })
-            .catch(function () {
-              panel.querySelector('.panel-inner').innerHTML =
-                '<p class="panel-error">Failed to load prisons. Please try again.</p>';
-            });
-        });
-      });
-    }
-
-    function showTransferPrisonGrid(panel, subId, state, prisons) {
-      var sub = subs.find(function (s) { return String(s.id) === String(subId); });
-      var pills = prisons.map(function (p) {
-        var isCurrent = sub && p.prison_name === sub.prison_name;
-        return '<button class="prison-pill' + (isCurrent ? ' selected' : '') + '" data-prison="' +
-               PortalAuth.esc(p.prison_name) + '">' + PortalAuth.esc(p.prison_name) + '</button>';
-      }).join('');
-
-      var tpNotice = hasTransferProtection(getProductTitle(sub))
-        ? '<div style="background:#E6FAF0;border-radius:8px;padding:10px 14px;font-size:14px;color:#000000;margin-bottom:16px;">Your plan includes free transfer \u2014 no charge applies.</div>'
-        : '<div style="background:#F2F6F0;border-radius:8px;padding:10px 14px;font-size:14px;color:#000000;margin-bottom:16px;">A transfer fee of $24.99 applies to your plan. Submit your request and our team will arrange payment before processing your transfer.</div>';
-
-      panel.innerHTML = [
-        '<div class="panel-inner">',
-          '<p class="panel-title">',
-            'Transfer to a new prison',
-            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
-          '</p>',
-          '<div class="state-pills">',
-            '<button class="state-pill' + (state === 'VIC' ? ' selected' : '') + '" data-state="VIC">Victoria</button>',
-            '<button class="state-pill' + (state === 'NSW' ? ' selected' : '') + '" data-state="NSW">New South Wales</button>',
-          '</div>',
-          tpNotice,
-          '<div class="prison-grid" id="prisonGrid-' + subId + '">',
-            pills || '<p class="panel-subtext">No prisons found for this state.</p>',
-          '</div>',
-        '</div>',
-      ].join('');
-
-      /* Re-wire state pills */
-      panel.querySelectorAll('[data-state]').forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          var newState = this.dataset.state;
-          clearCardMsg(subId);
-          panel.querySelector('.panel-inner').innerHTML =
-            '<div class="panel-loading"><div class="spinner spinner--sm"></div> Loading prisons...</div>';
-          fetch('/api/portal-supabase?action=get-prisons&state=' + encodeURIComponent(newState))
-            .then(function (r) { return r.json(); })
-            .then(function (p) { showTransferPrisonGrid(panel, subId, newState, p); })
-            .catch(function () {
-              panel.querySelector('.panel-inner').innerHTML =
-                '<p class="panel-error">Failed to load prisons. Please try again.</p>';
-            });
-        });
-      });
-
-      /* Wire prison pills */
-      panel.querySelectorAll('.prison-pill').forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          var prison = this.dataset.prison;
-          var sub2 = subs.find(function (s) { return String(s.id) === String(subId); });
-          if (sub2 && prison === sub2.prison_name) return; // same prison — no-op
-          showTransferConfirm(panel, subId, sub2, prison, state);
-        });
-      });
-
-      /* Scroll prison grid into view */
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function showTransferConfirm(panel, subId, sub, newPrison, newState) {
-      panel.innerHTML = [
-        '<div class="panel-inner">',
-          '<p class="panel-title">',
-            'Transfer to a new prison',
-            ' <a href="/terms-of-service.html#transfer-policy" target="_blank" rel="noopener noreferrer" class="info-tooltip-link" data-tooltip="Transfer Policy - Terms of Service" aria-label="Transfer Policy - Terms of Service">&#x2139;</a>',
-          '</p>',
-          '<div class="confirm-block">',
-            '<p class="confirm-block__text">',
-              'Transfer from ' + PortalAuth.esc(sub ? sub.prison_name : '-') + ' to ' + PortalAuth.esc(newPrison),
-            '</p>',
-            '<p class="confirm-block__note">',
-              'Your current number stays active for 7 days while your new number is set up. Both numbers will work during this time.',
-            '</p>',
-          '</div>',
-          '<button class="btn btn--green btn--full" id="confirmTransferBtn-' + subId + '">Confirm Transfer</button>',
-          '<button class="panel-cancel-link" id="cancelTransferLink-' + subId + '">Cancel</button>',
-        '</div>',
-      ].join('');
-
-      /* Scroll confirmation screen into view */
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      document.getElementById('cancelTransferLink-' + subId).addEventListener('click', function () {
-        clearCardMsg(subId);
-        closePanelEl(panel);
-      });
-
-      document.getElementById('confirmTransferBtn-' + subId).addEventListener('click', function () {
-        var btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner spinner--sm"></span>';
-
-        fetch('/api/portal-supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'submit-transfer',
-            subscription_id: subId,
-            new_prison_name: newPrison,
-            new_prison_state: newState,
-          }),
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (!data.success) throw new Error(data.error || 'error');
-            closePanelEl(panel);
-            updateSubStatus(subId, 'TRANSFER_PENDING');
-            showCardMsg(subId,
-              'Transfer request submitted. Your new number will be set up within 2 hours on business days. Both numbers will work during the 7-day transition.',
-              'success');
-          })
-          .catch(function () {
-            btn.disabled = false;
-            btn.textContent = 'Confirm Transfer';
-            showCardMsg(subId, 'Transfer failed. Please try again.', 'error');
-          });
-      });
-    }
-
-    /* ════════════════════════════════════════
-       CHANGE PLAN FLOW
-    ════════════════════════════════════════ */
-
-    function openChangePlanPanel(subId) {
-      var panel = document.getElementById('change-plan-' + subId);
-      if (!panel) return;
-
-      if (panel.classList.contains('is-open')) {
-        closePanelEl(panel);
-        return;
-      }
-      closeAllPanels('change-plan-' + subId);
-
-      var sub = subs.find(function (s) { return String(s.id) === String(subId); });
-      var currentKey = sub ? (sub.plan_interval || '').toLowerCase() : '';
-      var selectedKey = null;
-
-      function buildGrid() {
-        return PLAN_OPTIONS.map(function (opt) {
-          var isCurrent = opt.key === currentKey;
-          var isSelected = opt.key === selectedKey;
-          return [
-            '<div class="plan-option ' + (isCurrent ? 'is-current' : '') + (isSelected ? ' is-selected' : '') + '"',
-              ' data-plan-key="' + opt.key + '">',
-              isCurrent ? '<div class="plan-current-tag">Current plan</div>' : '',
-              '<div class="plan-option__label">' + PortalAuth.esc(opt.label) + '</div>',
-              '<div class="plan-option__interval">' + opt.interval + '</div>',
-            '</div>',
-          ].join('');
-        }).join('');
-      }
-
-      function render() {
-        var nextBill = sub ? PortalAuth.formatDate(sub.next_billing_date) : '-';
-        return [
-          '<div class="panel-inner">',
-            '<p class="panel-title">Change your plan</p>',
-            '<div class="plan-grid" id="planGrid-' + subId + '">' + buildGrid() + '</div>',
-            '<p class="panel-subtext">',
-              'Plan changes take effect immediately. Stripe automatically adjusts your next billing amount and date.',
-              ' <a class="panel-info-link" href="/terms-of-service.html" target="_blank" rel="noopener noreferrer"><img src="/assets/icons/feature_icons/Icon_Tooltip_Black.svg" alt="" width="16" height="16"></a>',
-            '</p>',
-            selectedKey
-              ? '<button class="btn btn--green btn--full" id="confirmPlanBtn-' + subId + '" style="margin-bottom:8px;">Confirm Change</button>'
-              : '<button class="btn btn--green btn--full" id="confirmPlanBtn-' + subId + '" disabled style="margin-bottom:8px;opacity:0.4;cursor:not-allowed;">Confirm Change</button>',
-            '<button class="panel-cancel-link" id="cancelPlanLink-' + subId + '">Cancel</button>',
-          '</div>',
-        ].join('');
-      }
-
-      openPanel(panel, render());
-      wirePlanPanel(panel, subId, currentKey);
-
-      /* Scroll panel into view once it opens */
-      setTimeout(function () {
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-
-      function wirePlanPanel(p, sid, cur) {
-        p.querySelectorAll('.plan-option:not(.is-current)').forEach(function (opt) {
-          opt.addEventListener('click', function () {
-            selectedKey = this.dataset.planKey;
-            p.innerHTML = render();
-            wirePlanPanel(p, sid, cur);
-          });
-        });
-
-        var confirmBtn = document.getElementById('confirmPlanBtn-' + sid);
-        if (confirmBtn) {
-          confirmBtn.addEventListener('click', function () {
-            if (!selectedKey) return;
-            var btn = this;
-            btn.disabled = true;
-            btn.textContent = 'Changing plan…';
-            fetch('/api/portal-supabase', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'change-plan', subscription_id: sid, target_interval: selectedKey }),
-            })
-              .then(function (r) { return r.json(); })
-              .then(function (data) {
-                if (data.error === 'already_on_this_plan') {
-                  showCardMsg(sid, 'You\'re already on this plan.', 'info');
-                } else if (data.ok) {
-                  showCardMsg(sid, 'Plan changed to ' + data.new_title + '. Your next billing will reflect the new amount.', 'success');
-                } else {
-                  showCardMsg(sid, 'Something went wrong. Please try again or contact support.', 'error');
-                }
-                setTimeout(function () {
-                  closePanelEl(panel);
-                  setTimeout(function () { clearCardMsg(sid); }, 220);
-                }, 4000);
-              })
-              .catch(function () {
-                showCardMsg(sid, 'Network error. Please try again.', 'error');
-              })
-              .finally(function () {
-                btn.disabled = false;
-                btn.textContent = 'Confirm';
-              });
-          });
-        }
-
-        var cancelLink = document.getElementById('cancelPlanLink-' + sid);
-        if (cancelLink) {
-          cancelLink.addEventListener('click', function () { closePanelEl(panel); });
-        }
       }
     }
 
