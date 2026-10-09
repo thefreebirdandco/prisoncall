@@ -518,9 +518,9 @@
 
     /* ── Phase B — expanded card: single viewport, zero scroll ── */
     .plan-card.is-expanded {
-      border-color: var(--color-black);
+      border: none;
       z-index: 5;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.14);
+      box-shadow: none;
       cursor: default;
       overflow: hidden;
     }
@@ -552,7 +552,7 @@
     .plan-card.is-expanded .plan-card__change { display: flex; }
 
     .plan-card.is-expanded .plan-card__header {
-      background: var(--color-black); border-bottom-color: transparent;
+      background: var(--color-black); border-bottom: none;
       padding: 22px 16px 20px; flex-shrink: 0;
     }
     .plan-card.is-expanded .plan-card__plan-name {
@@ -659,7 +659,7 @@
         max-width: none;
         margin: 0;
         border-radius: var(--radius-md);
-        border: 2px solid var(--color-black);
+        border: none;
         z-index: auto !important;
         background: var(--color-white);
         display: flex;
