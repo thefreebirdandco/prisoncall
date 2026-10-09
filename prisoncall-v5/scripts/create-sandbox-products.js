@@ -151,7 +151,7 @@ const PRODUCTS = [
 
   /* ── Lifetime: Lifetime Protection Bundle (one-time) ── */
   {
-    product_key: 'addon_lifetime',
+    product_key: 'has_lifetime_protection',
     name:        'Lifetime Protection Bundle',
     amount:      2999,
     recurring:   null,

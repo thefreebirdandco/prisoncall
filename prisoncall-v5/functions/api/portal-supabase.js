@@ -185,7 +185,7 @@ export async function onRequestPost(context) {
       addon_transfers: sub.addon_transfers,
       addon_post_renewal: sub.addon_post_renewal,
       addon_combo23: sub.addon_combo23,
-      addon_lifetime: sub.addon_lifetime,
+      has_lifetime_protection: sub.has_lifetime_protection,
       order_date: new Date().toISOString(),
       stripe_subscription_id: sub.stripe_subscription_id,
       stripe_customer_id: sub.stripe_customer_id,
