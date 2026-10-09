@@ -1699,9 +1699,7 @@
      missing Supabase row does not crash the page with a TypeError. */
   function buildPlansArray() {
     var defs = [
-      { key:'half_yearly', badge:'Best Value',   badgeCls:'',            cls:'plan-card--half-yearly', equivFn: null },
-      { key:'monthly',     badge:'Most Popular', badgeCls:'badge--black', cls:'plan-card--monthly',     equivFn: null },
-      { key:'fortnightly', badge:'Short Term',   badgeCls:'badge--dark',  cls:'plan-card--fortnightly', equivFn: null },
+      { key:'monthly', badge:'Most Popular', badgeCls:'badge--black', cls:'plan-card--monthly', equivFn: null },
     ];
     var result = [];
     defs.forEach(function(d) {
@@ -1862,11 +1860,11 @@
   /* true when "Customise protection options" has been clicked — reveals individual TP/RG/CG rows */
   var step4CustomiseMode = false;
 
-  /* Default: combo pre-ticked (TP+RG bundle). Keys stay legacy for checkout/Step 5. */
-  var selectedAddons    = { addon1: false, addon2: false, addon3: false, combo23: true, lifetimeAll: false };
+  /* Single add-on: Lifetime Bundle only. */
+  var selectedAddons    = { lifetimeAll: false };
 
   function defaultSelectedAddons() {
-    return { addon1: false, addon2: false, addon3: false, combo23: true, lifetimeAll: false };
+    return { lifetimeAll: false };
   }
 
   
@@ -2347,24 +2345,17 @@
     return +(getComboPlanPrice(planKey) - getBasePlanPrice(planKey)).toFixed(2);
   }
   function getTpPrice(planKey) {
-    var pk = getPlanIntervalKey(planKey);
-    return (PRICING.addons.tp && PRICING.addons.tp[pk] != null)
-      ? PRICING.addons.tp[pk]
-      : (PRICING.addons.addon2[pk] || 0);
+    return 0; /* Transfer Protection no longer a standalone add-on */
   }
   function getRgPrice(planKey) {
-    var pk = getPlanIntervalKey(planKey);
-    return (PRICING.addons.rg && PRICING.addons.rg[pk] != null)
-      ? PRICING.addons.rg[pk]
-      : (PRICING.addons.addon3[pk] || 0);
+    return 0; /* Renewal Protection no longer a standalone add-on */
   }
   function getCgPrice() {
-    if (PRICING.addons.cg && PRICING.addons.cg.price != null) return PRICING.addons.cg.price;
-    return PRICING.addons.addon1.monthly || 0;
+    return 0; /* CG no longer a standalone variant */
   }
   function getLpPrice() {
-    if (PRICING.addons.lp && PRICING.addons.lp.price != null) return PRICING.addons.lp.price;
-    return PRICING.addons.lifetimeAll.monthly || 0;
+    if (PRICING.addons.lifetime && PRICING.addons.lifetime.price != null) return PRICING.addons.lifetime.price;
+    return 0;
   }
   function intervalWord(planKey) {
     var pk = getPlanIntervalKey(planKey);
@@ -2391,13 +2382,7 @@
     return '/' + intv;
   }
   function calcLiveRecurring(planKey) {
-    var base = getBasePlanPrice(planKey);
-    if (selectedAddons.lifetimeAll) return base;
-    if (selectedAddons.combo23) return getComboPlanPrice(planKey);
-    var t = base;
-    if (selectedAddons.addon2) t += getTpPrice(planKey);
-    if (selectedAddons.addon3) t += getRgPrice(planKey);
-    return +t.toFixed(2);
+    return getBasePlanPrice(planKey);
   }
   function calcLiveOnetime() {
     if (selectedAddons.lifetimeAll) return getLpPrice();
@@ -2405,28 +2390,14 @@
     return 0;
   }
   function buildLpStatusMessage(planKey) {
-    var save = getComboAddonPrice(planKey);
-    var base = 'Fully protected for life. Saves ' + savePhrase(planKey, save);
-    if (getPlanIntervalKey(planKey) === 'fortnightly') return base + '.';
-    return base + '. 48hr cancellation guarantee included free.';
+    return 'Fully protected for life. Transfers, renewals & cancellations covered. 48hr cancellation guarantee included free.';
   }
   function buildProtectStatusHtml(planKey) {
-    var a = selectedAddons;
     var icon, msg, cls;
-    if (a.lifetimeAll) {
+    if (selectedAddons.lifetimeAll) {
       icon = '\u2605'; msg = buildLpStatusMessage(planKey); cls = 'is-ok';
-    } else if (a.combo23) {
-      icon = '\u2713'; msg = 'Transfer Protection + Renewal Protection included'; cls = 'is-ok';
-    } else if (!a.addon1 && !a.addon2 && !a.addon3) {
-      icon = '\u26A0'; msg = 'Your plan is unprotected. Prison transfers charged at $24.99 per request.'; cls = 'is-warn';
-    } else if (a.addon1 && !a.addon2 && !a.addon3) {
-      icon = '\u26A0'; msg = 'Partially protected. Transfers still charged at $24.99 per request.'; cls = 'is-warn';
-    } else if (a.addon2 && !a.addon3) {
-      icon = '\u26A0'; msg = 'Partially protected. Renewal protection not included.'; cls = 'is-warn';
-    } else if (a.addon3 && !a.addon2) {
-      icon = '\u26A0'; msg = 'Partially protected. Transfer protection not included. Transfers charged at $24.99 per request.'; cls = 'is-warn';
     } else {
-      icon = '\u2713'; msg = 'Your plan is protected'; cls = 'is-ok';
+      icon = '\u26A0'; msg = 'Your plan is unprotected. Prison transfers charged at $24.99 per request.'; cls = 'is-warn';
     }
     return '<div class="plan-card__status ' + cls + '" data-live-status>' +
       '<span class="plan-card__status-icon" aria-hidden="true">' + icon + '</span>' +
@@ -2436,59 +2407,26 @@
   function buildInCardProtectHtml(planKey) {
     var pk        = getPlanIntervalKey(planKey);
     var intv      = PRICING.plans[pk].interval;
-    var tp        = getTpPrice(pk);
-    var rg        = getRgPrice(pk);
-    var cg        = getCgPrice();
     var lp        = getLpPrice();
     var barePrice = getBasePlanPrice(pk);
-    var comboPrice = getComboPlanPrice(pk);
-    var saveAmount = (comboPrice - barePrice).toFixed(2);
 
-    var lpSelected = !!selectedAddons.lifetimeAll;
-    /* State 1: combo on, customise not clicked, LP not selected */
-    var isState1   = !step4CustomiseMode && !lpSelected;
-    /* State 3: LP selected */
-    var isState3   = lpSelected;
-
-    /* LP row classes */
-    var lpRowCls   = 'addon-row' + (lpSelected ? ' is-selected' : '');
-    var lpBadgeCls = 'addon-lp-badge' + (lpSelected ? '' : ' is-pulsing');
-
-    /* Sub-rows hidden in State 1 — revealed by Customise link or LP toggle */
-    var subHidden = isState1 ? ' hidden' : '';
-
-    /* In State 3: CG/TP/RG shown greyed + selected (included with LP) */
-    var isFortNightly = (pk === 'fortnightly');
-    var cgRowCls = 'addon-row' + (isState3 ? ' is-selected is-greyed' : (isFortNightly ? ' is-greyed' : (selectedAddons.addon1 ? ' is-selected' : ''))) + subHidden;
-    var tpRowCls = 'addon-row' + (isState3 ? ' is-selected is-greyed' : (selectedAddons.addon2 ? ' is-selected' : '')) + subHidden;
-    var rgRowCls = 'addon-row' + (isState3 ? ' is-selected is-greyed' : (selectedAddons.addon3 ? ' is-selected' : '')) + subHidden;
-    var cgChecked = (isState3) ? 'true' : 'false';
-    var tpChecked = (isState3 || !!selectedAddons.addon2) ? 'true' : 'false';
-    var rgChecked = (isState3 || !!selectedAddons.addon3) ? 'true' : 'false';
-    var cgInfoContent = isFortNightly
-      ? 'Available on Monthly and Half-Yearly plans only.'
-      : 'Protects your first 48 hours - cancel within 48hrs of signup for a full refund if your circumstances change.';
-    var cgUnavailableNote = isFortNightly
-      ? '<p class="addon-unavailable-note">Not available on Fortnightly plan.</p>'
-      : '';
-
-    /* Customise link: State 1 only */
-    var customiseCls = 'addon-customise-link' + (isState1 ? '' : ' hidden');
-    /* Value stack: State 3 only */
-    var valueStackCls = 'addon-value-stack' + (isState3 ? '' : ' hidden');
+    var lpSelected    = !!selectedAddons.lifetimeAll;
+    var lpRowCls      = 'addon-row' + (lpSelected ? ' is-selected' : '');
+    var lpBadgeCls    = 'addon-lp-badge' + (lpSelected ? '' : ' is-pulsing');
+    var valueStackCls = 'addon-value-stack' + (lpSelected ? '' : ' hidden');
 
     return [
       '<div class="plan-card__protect" id="planCardProtect">',
         '<p class="plan-card__protect-heading">Protect your plan</p>',
         '<div class="addon-table">',
 
-          /* LP row — always visible in Phase B */
+          /* LP row — Lifetime Bundle */
           '<div class="' + lpRowCls + '" data-addon="lifetimeAll" role="checkbox" aria-checked="' + lpSelected + '" tabindex="0">',
             '<div class="addon-checkbox">' + TICK_SVG + '</div>',
             '<div class="addon-row__content">',
               '<span class="' + lpBadgeCls + '">LIFETIME DEAL</span>',
               '<div class="addon-row__name-row">',
-                '<p class="addon-row__name">' + (isFortNightly ? 'Lifetime Protection' : 'Lifetime Protection + free CG') + '</p>',
+                '<p class="addon-row__name">Lifetime Protection + free CG</p>',
                 '<button type="button" class="addon-info-btn" data-info-toggle="lp" aria-label="More info about Lifetime Protection" aria-expanded="false">i</button>',
               '</div>',
               '<div class="addon-row__price-line">',
@@ -2497,87 +2435,29 @@
               '</div>',
               '<div class="addon-detail-panel" id="addon-detail-lp">',
                 '<ul class="addon-detail-list">',
-                  (isFortNightly ? '' : '<li>Get Cancellation Guarantee free - $' + cg.toFixed(2) + ' value</li>'),
+                  '<li>48hr Cancellation Guarantee included free</li>',
                   '<li>Transfer + Renewal Protection included for life</li>',
-                  '<li>Your plan price drops to $' + barePrice.toFixed(2) + '/' + intv + ' forever</li>',
+                  '<li>Your plan price stays at $' + barePrice.toFixed(2) + '/' + intv + ' forever</li>',
                 '</ul>',
               '</div>',
             '</div>',
           '</div>',
 
-          /* State 3 value stack — hidden unless LP selected */
+          /* Value stack — visible when LP selected */
           '<div class="' + valueStackCls + '" id="addon-value-stack">',
             '<ul class="addon-value-list">',
-              (isFortNightly ? '' : '<li><span class="addon-value-check">&#10003;</span> 48hr Cancellation Guarantee - free ($' + cg.toFixed(2) + ' value)</li>'),
+              '<li><span class="addon-value-check">&#10003;</span> 48hr Cancellation Guarantee - free</li>',
               '<li><span class="addon-value-check">&#10003;</span> Transfer Protection - for life</li>',
               '<li><span class="addon-value-check">&#10003;</span> Renewal Protection - for life</li>',
-              '<li><span class="addon-value-check">&#10003;</span> Lower plan price forever - save $' + saveAmount + '/' + intv + ' vs standard plan</li>',
             '</ul>',
             '<p class="addon-covered-copy">You are fully covered. Nothing to worry about.</p>',
           '</div>',
-
-          /* CG row — hidden in State 1 */
-          '<div class="' + cgRowCls + '" data-addon="addon1" role="checkbox" aria-checked="' + cgChecked + '" tabindex="0">',
-            '<div class="addon-checkbox">' + TICK_SVG + '</div>',
-            '<div class="addon-row__content">',
-              '<div class="addon-row__name-row">',
-                '<p class="addon-row__name">48hr Cancellation Guarantee (CG)</p>',
-                '<button type="button" class="addon-info-btn" data-info-toggle="cg" aria-label="More info about Cancellation Guarantee" aria-expanded="false">i</button>',
-              '</div>',
-              '<div class="addon-row__price-line">',
-                '<span class="addon-row__price">$' + cg.toFixed(2) + ' once</span>',
-                '<span class="addon-row__payment-type">One-time at checkout</span>',
-              '</div>',
-              cgUnavailableNote,
-              '<div class="addon-detail-panel" id="addon-detail-cg">',
-                '<p class="addon-detail-copy">' + cgInfoContent + '</p>',
-              '</div>',
-            '</div>',
-          '</div>',
-
-          /* TP row — hidden in State 1 */
-          '<div class="' + tpRowCls + '" data-addon="addon2" role="checkbox" aria-checked="' + tpChecked + '" tabindex="0">',
-            '<div class="addon-checkbox">' + TICK_SVG + '</div>',
-            '<div class="addon-row__content">',
-              '<div class="addon-row__name-row">',
-                '<p class="addon-row__name">Transfer Protection (TP)</p>',
-                '<button type="button" class="addon-info-btn" data-info-toggle="tp" aria-label="More info about Transfer Protection" aria-expanded="false">i</button>',
-              '</div>',
-              '<div class="addon-row__price-line">',
-                '<span class="addon-row__price" data-dynamic="tp-price">$' + tp.toFixed(2) + '/' + intv + '</span>',
-                '<span class="addon-row__payment-type">Recurring with your plan</span>',
-              '</div>',
-              '<div class="addon-detail-panel" id="addon-detail-tp">',
-                '<p class="addon-detail-copy">Covers the cost of transferring your Prisoncall number if your loved one moves to a different prison. Without this, each transfer is charged at $24.99 per request.</p>',
-              '</div>',
-            '</div>',
-          '</div>',
-
-          /* RG row — hidden in State 1 */
-          '<div class="' + rgRowCls + '" data-addon="addon3" role="checkbox" aria-checked="' + rgChecked + '" tabindex="0">',
-            '<div class="addon-checkbox">' + TICK_SVG + '</div>',
-            '<div class="addon-row__content">',
-              '<div class="addon-row__name-row">',
-                '<p class="addon-row__name">Renewal Protection (RG)</p>',
-                '<button type="button" class="addon-info-btn" data-info-toggle="rg" aria-label="More info about Renewal Protection" aria-expanded="false">i</button>',
-              '</div>',
-              '<div class="addon-row__price-line">',
-                '<span class="addon-row__price" data-dynamic="rg-price">$' + rg.toFixed(2) + '/' + intv + '</span>',
-                '<span class="addon-row__payment-type">Recurring with your plan</span>',
-              '</div>',
-              '<div class="addon-detail-panel" id="addon-detail-rg">',
-                '<p class="addon-detail-copy">Gives you 96 hours after each billing renewal to cancel and receive a full refund. Useful if your loved one is released shortly after a renewal date.</p>',
-              '</div>',
-            '</div>',
-          '</div>',
-
-          /* Customise link — State 1 only */
-          '<button type="button" class="' + customiseCls + '" data-customise-btn>Customise protection options</button>',
 
         '</div>',
       '</div>'
     ].join('');
   }
+
 
   function buildStep4El(expandedKey){
     /* expandedKey: null = Phase A; plan key = Phase B expanded.
@@ -3320,12 +3200,8 @@
         protectEl = _np1;
         wireInCardAddons(stepEl, protectEl);
       } else {
-        /* Deselecting LP: revert fully to State 1 — combo-inclusive, all sub-addons cleared */
+        /* Deselecting LP: revert to unprotected state */
         selectedAddons.lifetimeAll = false;
-        selectedAddons.combo23     = true;
-        selectedAddons.addon1      = false;
-        selectedAddons.addon2      = false;
-        selectedAddons.addon3      = false;
         step4CustomiseMode         = false;
         var _t2 = document.createElement('div');
         _t2.innerHTML = buildInCardProtectHtml(planKey);
@@ -3497,78 +3373,32 @@
     if(errEl){ errEl.parentNode.removeChild(errEl); }
     if(btn){ btn.textContent = 'Processing\u2026'; btn.style.pointerEvents = 'none'; }
 
-    /* ── Variant + selling-plan lookup (fortnightly / monthly / half_yearly) ── */
-    var VARIANT_MAP = {
-      fortnightly: {
-        base:    { variantId: '54535954497815',  sellingPlanId: '698753188119' },
-        addon1:  { variantId: '54535954891031',  sellingPlanId: '698753188119' },
-        addon2:  { variantId: '54535954956567',  sellingPlanId: '698753188119' },
-        combo23: { variantId: '54535955218711',  sellingPlanId: '698753188119' }
-      },
-      monthly: {
-        base:    { variantId: '54535955382551',  sellingPlanId: '698753220887' },
-        addon1:  { variantId: '54535955546391',  sellingPlanId: '698753220887' },
-        addon2:  { variantId: '54535955710231',  sellingPlanId: '698753220887' },
-        combo23: { variantId: '54535955841303',  sellingPlanId: '698753220887' }
-      },
-      half_yearly: {
-        base:    { variantId: '54535956005143',  sellingPlanId: '698753384727' },
-        addon1:  { variantId: '54535957020951',  sellingPlanId: '698753384727' },
-        addon2:  { variantId: '54535957086487',  sellingPlanId: '698753384727' },
-        combo23: { variantId: '54535957119255',  sellingPlanId: '698753384727' }
-      }
-    };
-    var LIFETIME_VARIANT = '54535991394583';
-    var ADDON1_VARIANT   = '54535991361815'; /* 48hr Cancellation Guarantee */
+    /* ── Variant constants — Monthly Plan + Lifetime Bundle only ── */
+    var PLAN_VARIANT      = '54535955382551';
+    var PLAN_SELLING_PLAN = '698753220887';
+    var LIFETIME_VARIANT  = '54535991394583';
 
-    var lineItems    = [];
-    var lifetimeQty  = 0;
-    var addon1Qty    = 0; /* addon1 = 48hr Cancellation Guarantee (one-time) */
+    var lineItems   = [];
+    var lifetimeQty = 0;
 
     entries.forEach(function(e){
-      var addons   = e.addons || {};
-
-      /* Count one-time add-ons for every entry regardless of plan key — must
-         happen before the planMap guard so entries with unmapped plan keys
-         (e.g. annual, weekly) still contribute to one-time quantities.
-         addon1 = 48hr CG (one-time); lifetimeAll = Lifetime Protection (one-time). */
+      var addons = e.addons || {};
       if(addons.lifetimeAll) lifetimeQty++;
-      if(addons.addon1)      addon1Qty++;
-
-      /* Recurring plan variant — only add if plan key is in the map */
-      var planMap  = VARIANT_MAP[e.planKey];
-      if(!planMap) return;
-
-      /* Map real selectedAddons keys to VARIANT_MAP lookup keys:
-           addons.addon2 (Transfer Guarantee)  → VARIANT_MAP 'addon1'
-           addons.addon3 (Renewal Guarantee)   → VARIANT_MAP 'addon2'
-           addons.addon1 (48hr CG) is one-time — never affects recurring variant */
-      var comboKey = 'base';
-      if(addons.combo23)       comboKey = 'combo23';
-      else if(addons.addon2)   comboKey = 'addon1';
-      else if(addons.addon3)   comboKey = 'addon2';
-
-      var lookup = planMap[comboKey];
-      if(!lookup) return;
 
       lineItems.push({
-        merchandiseId: 'gid://shopify/ProductVariant/' + lookup.variantId,
-        sellingPlanId: 'gid://shopify/SellingPlan/'  + lookup.sellingPlanId,
+        merchandiseId: 'gid://shopify/ProductVariant/' + PLAN_VARIANT,
+        sellingPlanId: 'gid://shopify/SellingPlan/'    + PLAN_SELLING_PLAN,
         quantity: 1,
         attributes: [
-          { key: 'prison_name',     value: e.prison  },
-          { key: 'prison_state',    value: e.state   },
-          { key: 'assigned_mobile', value: e.mobile  }
+          { key: 'prison_name',     value: e.prison },
+          { key: 'prison_state',    value: e.state  },
+          { key: 'assigned_mobile', value: e.mobile }
         ]
       });
     });
 
-    /* One-time add-ons: quantity reflects how many plans have the addon selected */
     if(lifetimeQty > 0){
       lineItems.push({ merchandiseId: 'gid://shopify/ProductVariant/' + LIFETIME_VARIANT, quantity: lifetimeQty });
-    }
-    if(addon1Qty > 0){
-      lineItems.push({ merchandiseId: 'gid://shopify/ProductVariant/' + ADDON1_VARIANT, quantity: addon1Qty });
     }
 
     var attributes = [
@@ -3926,9 +3756,7 @@
     wireStep3(s3);
 
     selectedAddons = Object.assign({}, entry.addons || defaultSelectedAddons());
-    /* Restore customise mode: if saved addons had individual (non-combo) selection,
-       re-enter State 2 so the correct rows are visible when the card opens */
-    step4CustomiseMode = !selectedAddons.combo23 && !selectedAddons.lifetimeAll;
+    step4CustomiseMode = !selectedAddons.lifetimeAll;
     var s4 = buildStep4El(entry.planKey);
     planFlow.appendChild(s4);
     wireStep4(s4);
@@ -3950,49 +3778,21 @@
   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
   function getAddonTotal(planKey, addons) {
     if(!addons) return 0;
-    var t = 0;
-    if(addons.lifetimeAll){ t += PRICING.addons.lifetimeAll[planKey] || 0; return t; }
-    if(addons.addon1)  t += PRICING.addons.addon1[planKey]  || 0;
-    if(addons.combo23) t += PRICING.addons.combo23[planKey] || 0;
-    else {
-      if(addons.addon2) t += PRICING.addons.addon2[planKey] || 0;
-      if(addons.addon3) t += PRICING.addons.addon3[planKey] || 0;
-    }
-    return t;
+    if(addons.lifetimeAll) return getLpPrice();
+    return 0;
   }
 
-  /* Returns the sum of RECURRING add-on prices only (excludes one-time add-ons:
-     addon1 = 48hr Cancellation Guarantee, lifetimeAll = Lifetime Protection). 
-     Used as the discount base so 10% bundle discount never applies to one-time items. */
+  /* Lifetime Bundle is one-time — no recurring addon price. */
   function getRecurringAddonTotal(planKey, addons) {
-    if(!addons) return 0;
-    if(addons.lifetimeAll) return 0; /* lifetimeAll is one-time and supersedes recurring addons */
-    /* addon1 (48hr Cancellation Guarantee) is one-time — excluded */
-    var t = 0;
-    if(addons.combo23) t += PRICING.addons.combo23[planKey] || 0;
-    else {
-      if(addons.addon2) t += PRICING.addons.addon2[planKey] || 0;
-      if(addons.addon3) t += PRICING.addons.addon3[planKey] || 0;
-    }
-    return t;
+    return 0;
   }
 
   function buildSummaryAddonLines(e) {
-    if(!e.addons) return '';
-    var pk = e.planKey;
-    var s  = '';
+    if(!e.addons || !e.addons.lifetimeAll) return '';
     function addonLine(label, price, suffix) {
       return '<div class="summary-line__addon"><span class="summary-line__addon-name">' + label + '</span><span class="summary-line__addon-price">$' + price + suffix + '</span></div>';
     }
-    /* Recurring plan addons (combo23, addon2, addon3) are folded into the plan
-       product name and price — only one-time add-ons appear as separate lines. */
-    if(e.addons.lifetimeAll) {
-      s += addonLine('Lifetime Protection', (PRICING.addons.lifetimeAll[pk] || 49.99).toFixed(2), ' once');
-    }
-    if(e.addons.addon1) {
-      s += addonLine('48hr Cancellation Guarantee', (PRICING.addons.addon1[pk] || 29.99).toFixed(2), ' once');
-    }
-    return s ? '<div class="summary-line__addons">' + s + '</div>' : '';
+    return '<div class="summary-line__addons">' + addonLine('Lifetime Bundle', getLpPrice().toFixed(2), ' once') + '</div>';
   }
 
   /* === BUNDLE DISCOUNT MODAL === */
@@ -4357,57 +4157,6 @@ function renderCompletedArea(){
     startNewPlan(getUrlState(), getUrlPrison());
   }());
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     DEV PANEL â€” inject only on staging domain (prisoncall.pages.dev).
-     Never appears on prisoncall.com.au or any other domain.
-     Remove this entire IIFE at integration.
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-  (function(){
-    if(window.location.hostname !== 'prisoncall.pages.dev') return;
-    var panel = document.createElement('div');
-    panel.className = 'dev-panel';
-    panel.setAttribute('role', 'region');
-    panel.setAttribute('aria-label', 'Developer tools');
-    panel.innerHTML = [
-      '<p class="dev-panel__title">Dev Tools</p>',
-      '<div class="dev-panel__row">',
-        '<span class="dev-panel__label">OTP Verify</span>',
-        '<label class="dev-toggle" aria-label="Toggle OTP Verify">',
-          '<input type="checkbox" id="devToggleOTP">',
-          '<span class="dev-toggle__track"></span>',
-        '</label>',
-      '</div>',
-      '<button class="dev-panel__btn" id="devSkipToStep4" type="button">Skip to Step 4</button>'
-    ].join('');
-    document.body.appendChild(panel);
-    /* Wire toggle to DEV_FLAGS â€” updates take effect immediately */
-    document.getElementById('devToggleOTP').addEventListener('change', function(){
-      DEV_FLAGS.OTP = this.checked;
-    });
-    document.getElementById('devSkipToStep4').addEventListener('click', function(){
-      entries = [];
-      selectedAddons = { addon1:false, addon2:false, addon3:false, combo23:false, lifetimeAll:false };
-      cur = { id: nextId++, state: 'vic', prison: 'Melbourne Assessment Prison', mobile: '0400000001', planKey: null };
-      editId = null;
-      clearGate();
-      planFlow.innerHTML = '';
-      renderCompletedArea();
-      var s1 = buildStep1El('vic');
-      planFlow.appendChild(s1);
-      wireStep1(s1);
-      var s2 = buildStep2El('vic', 'Melbourne Assessment Prison');
-      planFlow.appendChild(s2);
-      wireStep2(s2);
-      var s3 = buildStep3El('0400000001');
-      planFlow.appendChild(s3);
-      wireStep3(s3);
-      var s4 = buildStep4El(null);
-      planFlow.appendChild(s4);
-      wireStep4(s4);
-      scrollToEl(s4, true);
-      if(typeof snapCarouselToKey === 'function'){ snapCarouselToKey(s4, 'monthly'); }
-    });
-  })();
   </script>
 
 <script src="/assets/js/transfer-prison-modal.js"></script>

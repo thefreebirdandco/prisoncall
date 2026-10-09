@@ -9,38 +9,14 @@
  */
 
 const VARIANT_IDS = [
-  'gid://shopify/ProductVariant/54535954497815',
-  'gid://shopify/ProductVariant/54535954891031',
-  'gid://shopify/ProductVariant/54535954956567',
-  'gid://shopify/ProductVariant/54535955218711',
-  'gid://shopify/ProductVariant/54535955382551',
-  'gid://shopify/ProductVariant/54535955546391',
-  'gid://shopify/ProductVariant/54535955710231',
-  'gid://shopify/ProductVariant/54535955841303',
-  'gid://shopify/ProductVariant/54535956005143',
-  'gid://shopify/ProductVariant/54535957020951',
-  'gid://shopify/ProductVariant/54535957086487',
-  'gid://shopify/ProductVariant/54535957119255',
-  'gid://shopify/ProductVariant/54535991361815',
-  'gid://shopify/ProductVariant/54535991394583',
+  'gid://shopify/ProductVariant/54535955382551', // Monthly Plan
+  'gid://shopify/ProductVariant/54535991394583', // Lifetime Bundle
 ];
 
 const PRODUCTS_QUERY = `
   query {
     nodes(ids: [
-      "gid://shopify/ProductVariant/54535954497815",
-      "gid://shopify/ProductVariant/54535954891031",
-      "gid://shopify/ProductVariant/54535954956567",
-      "gid://shopify/ProductVariant/54535955218711",
       "gid://shopify/ProductVariant/54535955382551",
-      "gid://shopify/ProductVariant/54535955546391",
-      "gid://shopify/ProductVariant/54535955710231",
-      "gid://shopify/ProductVariant/54535955841303",
-      "gid://shopify/ProductVariant/54535956005143",
-      "gid://shopify/ProductVariant/54535957020951",
-      "gid://shopify/ProductVariant/54535957086487",
-      "gid://shopify/ProductVariant/54535957119255",
-      "gid://shopify/ProductVariant/54535991361815",
       "gid://shopify/ProductVariant/54535991394583"
     ]) {
       ... on ProductVariant {
@@ -72,120 +48,22 @@ function buildPricing(priceById) {
     return v;
   };
 
-  const fortnightlyBase  = p('54535954497815');
-  const fortnightlyCombo = p('54535955218711');
-  const monthlyBase      = p('54535955382551');
-  const monthlyCombo     = p('54535955841303');
-  const halfYearlyBase   = p('54535956005143');
-  const halfYearlyCombo  = p('54535957119255');
+  const monthlyPrice  = p('54535955382551');
+  const lifetimePrice = p('54535991394583');
 
-  /* TP/RG Shopify variants are plan+addon combined prices — store add-on delta only */
-  const tpFortnightly = +(p('54535954891031') - fortnightlyBase).toFixed(2);
-  const rgFortnightly = +(p('54535954956567') - fortnightlyBase).toFixed(2);
-  const tpMonthly     = +(p('54535955546391') - monthlyBase).toFixed(2);
-  const rgMonthly     = +(p('54535955710231') - monthlyBase).toFixed(2);
-  const tpHalfYearly  = +(p('54535957020951') - halfYearlyBase).toFixed(2);
-  const rgHalfYearly  = +(p('54535957086487') - halfYearlyBase).toFixed(2);
-
-  const cgPrice = p('54535991361815');
-  const lpPrice = p('54535991394583');
-
-  const comboDelta = {
-    fortnightly: +(fortnightlyCombo - fortnightlyBase).toFixed(2),
-    monthly:     +(monthlyCombo - monthlyBase).toFixed(2),
-    half_yearly: +(halfYearlyCombo - halfYearlyBase).toFixed(2),
-  };
-
-  /* New Step 4 keys + legacy aliases (addon1/2/3/combo23/lifetimeAll)
-     so Step 5 summary / checkout mapping keep working unchanged. */
   return {
     plans: {
-      fortnightly: {
-        price: fortnightlyBase,
-        comboPrice: fortnightlyCombo,
-        interval: 'fortnight',
-        label: 'Fortnightly',
-      },
       monthly: {
-        price: monthlyBase,
-        comboPrice: monthlyCombo,
+        price: monthlyPrice,
         interval: 'month',
         label: 'Monthly',
       },
-      half_yearly: {
-        price: halfYearlyBase,
-        comboPrice: halfYearlyCombo,
-        interval: '6 months',
-        label: 'Half-Yearly',
-      },
     },
     addons: {
-      tp: {
-        label: 'Transfer Protection',
-        type: 'recurring',
-        fortnightly: tpFortnightly,
-        monthly: tpMonthly,
-        half_yearly: tpHalfYearly,
-      },
-      rg: {
-        label: 'Renewal Protection',
-        type: 'recurring',
-        fortnightly: rgFortnightly,
-        monthly: rgMonthly,
-        half_yearly: rgHalfYearly,
-      },
-      combo: {
-        label: 'Transfer + Renewal Combo',
-        type: 'recurring',
-        fortnightly: comboDelta.fortnightly,
-        monthly: comboDelta.monthly,
-        half_yearly: comboDelta.half_yearly,
-      },
-      cg: {
-        label: '48hr Cancellation Guarantee',
+      lifetime: {
+        label: 'Lifetime Bundle',
         type: 'one-time',
-        price: cgPrice,
-      },
-      lp: {
-        label: 'Lifetime Protection',
-        type: 'one-time',
-        price: lpPrice,
-      },
-      /* Legacy aliases for buildSummaryAddonLines / getAddonTotal / checkout */
-      addon1: {
-        label: '48hr Cancellation Guarantee',
-        type: 'one-time',
-        fortnightly: cgPrice,
-        monthly: cgPrice,
-        half_yearly: cgPrice,
-      },
-      addon2: {
-        label: 'Transfer Protection',
-        type: 'recurring',
-        fortnightly: tpFortnightly,
-        monthly: tpMonthly,
-        half_yearly: tpHalfYearly,
-      },
-      addon3: {
-        label: 'Renewal Protection',
-        type: 'recurring',
-        fortnightly: rgFortnightly,
-        monthly: rgMonthly,
-        half_yearly: rgHalfYearly,
-      },
-      combo23: {
-        label: 'Transfer + Renewal Combo',
-        type: 'recurring',
-        fortnightly: comboDelta.fortnightly,
-        monthly: comboDelta.monthly,
-        half_yearly: comboDelta.half_yearly,
-      },
-      lifetimeAll: {
-        label: 'Lifetime Protection',
-        type: 'one-time',
-        fortnightly: lpPrice,
-        monthly: lpPrice,
-        half_yearly: lpPrice,
+        price: lifetimePrice,
       },
     },
   };
