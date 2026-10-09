@@ -110,6 +110,27 @@
     </div>
   </div>
 
+  <!-- ═══ ADD PROTECTION MODAL (global) ═══ -->
+  <div id="addProtectionModal" class="cancel-overlay" hidden aria-modal="true" role="dialog">
+    <div class="cancel-overlay__inner">
+      <h2 class="cancel-overlay__title">Lifetime Protection</h2>
+      <ul style="list-style:none;padding:0;margin:0 0 20px;text-align:left;">
+        <li style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:15px;font-weight:500;">
+          <span style="color:#00D258;font-size:17px;font-weight:700;">&#10003;</span>Transfer Protection
+        </li>
+        <li style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:15px;font-weight:500;">
+          <span style="color:#00D258;font-size:17px;font-weight:700;">&#10003;</span>Renewal Protection
+        </li>
+      </ul>
+      <p style="font-size:15px;font-weight:700;color:#101010;margin-bottom:24px;">$19.99 once. Pay once. Covered for life.</p>
+      <div class="cancel-overlay__btns">
+        <button class="btn btn--black btn--full" id="confirmAddProtectionBtn">Add Protection</button>
+        <button id="cancelAddProtectionBtn" style="background:none;border:none;color:#666666;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:10px 0;min-height:44px;width:100%;">Cancel</button>
+      </div>
+      <p id="addProtectionError" style="margin-top:8px;font-size:13px;color:#c0392b;min-height:18px;text-align:center;"></p>
+    </div>
+  </div>
+
   <!-- ═══ CANCEL OVERLAY (global) ═══ -->
   <div id="cancelOverlay" class="cancel-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="cancelTitle">
     <div class="cancel-overlay__inner">
@@ -428,13 +449,19 @@
         var tpParam    = sub.has_lifetime_protection ? '1' : '0';
         var didParam   = encodeURIComponent(sub.current_did || '');
         var stateParam = encodeURIComponent(sub.prison_state || '');
-        return [
+        var parts = [
           '<a href="/transfer-prison?did=' + didParam + '&state=' + stateParam + '&protected=' + tpParam + '" class="btn btn--outline btn--full">Transfer Prison</a>',
+        ];
+        if (!sub.has_lifetime_protection) {
+          parts.push('<button class="btn btn--black btn--full add-protection-btn" data-sub-id="' + id + '" style="margin-top:8px;">Add Protection</button>');
+        }
+        parts.push(
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">',
-            '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
-            '<button class="update-payment-link" data-sub-id="' + id + '" style="background:none;border:none;color:#888;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;min-height:44px;">Update Payment Method</button>',
-          '</div>',
-        ].join('');
+          '<button class="cancel-link cancel-btn" data-sub-id="' + id + '">Cancel Plan</button>',
+          '<button class="update-payment-link" data-sub-id="' + id + '" style="background:none;border:none;color:#888;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;min-height:44px;">Update Payment Method</button>',
+          '</div>'
+        );
+        return parts.join('');
       }
       if (s === 'PAUSED') {
         return [
@@ -502,6 +529,12 @@
 
     /* ─── Wire all card buttons ─── */
     function wireAllCards() {
+      /* Add Protection */
+      document.querySelectorAll('.add-protection-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openAddProtectionModal();
+        });
+      });
       /* Cancel Plan */
       document.querySelectorAll('.cancel-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -682,6 +715,54 @@
           document.getElementById('cancelOverlay').hidden = true;
           if (cancelSubId) showCardMsg(cancelSubId, 'Cancellation failed. Please try again.', 'error');
           cancelSubId = null;
+        });
+    });
+
+    /* ════════════════════════════════════════
+       ADD PROTECTION MODAL
+    ════════════════════════════════════════ */
+
+    function openAddProtectionModal() {
+      document.getElementById('addProtectionError').textContent = '';
+      var btn = document.getElementById('confirmAddProtectionBtn');
+      btn.disabled = false;
+      btn.textContent = 'Add Protection';
+      document.getElementById('addProtectionModal').hidden = false;
+    }
+
+    document.getElementById('cancelAddProtectionBtn').addEventListener('click', function () {
+      document.getElementById('addProtectionModal').hidden = true;
+    });
+
+    document.getElementById('confirmAddProtectionBtn').addEventListener('click', function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner spinner--sm"></span>';
+      document.getElementById('addProtectionError').textContent = '';
+
+      fetch('/api/shopify-cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineItems: [{ merchandiseId: 'gid://shopify/ProductVariant/54535991394583', quantity: 1 }],
+          attributes: [],
+          discountCodes: [],
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success && data.checkoutUrl) {
+            window.location.href = data.checkoutUrl;
+          } else {
+            btn.disabled = false;
+            btn.textContent = 'Add Protection';
+            document.getElementById('addProtectionError').textContent = data.error || 'Something went wrong. Please try again.';
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Add Protection';
+          document.getElementById('addProtectionError').textContent = 'Network error. Please try again.';
         });
     });
 
