@@ -83,7 +83,10 @@
 
     /* ─── Auto-format mobile as 04XX XXX XXX ─── */
     mobileInput.addEventListener('input', function () {
-      var raw = this.value.replace(/\D/g, '').slice(0, 10);
+      var raw = this.value.replace(/\D/g, '');
+      /* Normalise E.164 autocomplete: +61XXXXXXXXX or 61XXXXXXXXX → 04XXXXXXXXX */
+      if (raw.length === 11 && raw.slice(0, 2) === '61') raw = '0' + raw.slice(2);
+      raw = raw.slice(0, 10);
       var fmt = raw;
       if (raw.length > 4 && raw.length <= 7) {
         fmt = raw.slice(0, 4) + ' ' + raw.slice(4);
@@ -98,7 +101,10 @@
 
     /* ─── Validate mobile ─── */
     function getMobileDigits() {
-      return mobileInput.value.replace(/\D/g, '');
+      var d = mobileInput.value.replace(/\D/g, '');
+      /* Defensive normalisation in case autocomplete bypassed the input event */
+      if (d.length === 11 && d.slice(0, 2) === '61') d = '0' + d.slice(2);
+      return d;
     }
 
     function isValidMobile(digits) {
