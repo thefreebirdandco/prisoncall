@@ -188,7 +188,6 @@ export async function onRequestPost(context) {
       has_lifetime_protection: sub.has_lifetime_protection,
       order_date: new Date().toISOString(),
       stripe_subscription_id: sub.stripe_subscription_id,
-      stripe_customer_id: sub.stripe_customer_id,
       status: 'PENDING',
     };
 
