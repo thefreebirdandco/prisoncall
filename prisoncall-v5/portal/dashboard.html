@@ -406,11 +406,10 @@
     /* ─── Add-on badges ─── */
     function addonBadges(sub) {
       var defs = [
-        { key: 'addon_48hr_cancel',   label: '48hr Guarantee' },
-        { key: 'addon_transfers',      label: 'Unlimited Transfers' },
-        { key: 'addon_post_renewal',   label: 'Post-Renewal Window' },
-        { key: 'addon_combo23',        label: 'Transfer + Post-Renewal' },
-        { key: 'has_lifetime_protection', label: 'Lifetime Protection' },
+        { key: 'addon_48hr_cancel',  label: '48hr Guarantee' },
+        { key: 'addon_transfers',    label: 'Unlimited Transfers' },
+        { key: 'addon_post_renewal', label: 'Post-Renewal Window' },
+        { key: 'addon_combo23',      label: 'Transfer + Post-Renewal' },
       ];
       var html = '';
       defs.forEach(function (d) {
@@ -466,6 +465,7 @@
 
           '<div class="pc-card__top" id="top-' + sub.id + '">',
             statusBadge(sub.status),
+            (sub.status === 'ACTIVE' && sub.has_lifetime_protection) ? '<span class="badge badge--green-dark">Lifetime Protection</span>' : '',
             isBundled ? '<span class="badge badge--green-dark">10% bundle discount active</span>' : '',
           '</div>',
 
