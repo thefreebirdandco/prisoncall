@@ -461,8 +461,6 @@
       var nextBill = (sub.status !== 'CANCELLED')
         ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val" id="next-billing-' + sub.id + '">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
         : '';
-      var _planDisplay = '<span class="pc-val">Prisoncall Plan \u2014 $49.99/month</span>';
-
       return [
         '<div class="pc-card" data-sub-id="' + sub.id + '" data-status="' + PortalAuth.esc(sub.status) + '" data-did="' + PortalAuth.esc(sub.current_did || '') + '">',
 
@@ -483,10 +481,6 @@
             '<div class="pc-row">',
               '<span class="pc-key">Assigned mobile</span>',
               '<span class="pc-val">' + (sub.assigned_mobile ? fmtMobile(sub.assigned_mobile) : '<span style="color:var(--color-muted)">Not set</span>') + '</span>',
-            '</div>',
-            '<div class="pc-row">',
-              '<span class="pc-key">Plan</span>',
-              _planDisplay,
             '</div>',
             nextBill,
             addonBadges(sub),
