@@ -263,7 +263,7 @@ function mobileToE164(val) {
 function renderActionArea() {
   switch (sub.status) {
     case 'PENDING': return renderPendingAction();
-    case 'SUSPENDED': return renderSuspendedAction();
+    case 'PAUSED': return renderSuspendedAction();
     case 'CANCELLED': return renderCancelledAction();
     case 'ACTIVE':
     default: return renderActiveAction();

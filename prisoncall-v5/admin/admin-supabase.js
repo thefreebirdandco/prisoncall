@@ -152,7 +152,7 @@ export function derivePBXName(sub) {
 export function statusClass(status) {
   const map = {
     'PENDING': 'pending', 'ACTIVE': 'active',
-    'SUSPENDED': 'suspended', 'CANCELLED': 'cancelled',
+    'PAUSED': 'paused', 'CANCELLED': 'cancelled',
     'WINDOW_OPEN': 'window-open', 'COMPLETED': 'completed',
   };
   return map[(status||'').toUpperCase()] || 'pending';
@@ -162,7 +162,7 @@ export function statusClass(status) {
 export function statusLabel(status) {
   const map = {
     'PENDING': 'Pending', 'ACTIVE': 'Active',
-    'SUSPENDED': 'Suspended', 'CANCELLED': 'Cancelled',
+    'PAUSED': 'Paused', 'CANCELLED': 'Cancelled',
     'WINDOW_OPEN': 'Window Open', 'COMPLETED': 'Completed',
   };
   return map[(status||'').toUpperCase()] || status || 'Unknown';
