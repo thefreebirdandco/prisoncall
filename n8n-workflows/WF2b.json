@@ -1,0 +1,226 @@
+{
+  "name": "PRISONCALL - WF4 Payment Restored",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prisoncall-inbound-sms",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "685240d0-c8c2-43f8-bbec-763ea1c3fbb2",
+      "name": "Webhook - Twilio Inbound SMS",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1088, -208],
+      "webhookId": "prisoncall-inbound-sms"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prisoncall-payment-succeeded",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "bfe3f462-50bc-4ce0-8db2-4850b92f0319",
+      "name": "Webhook - Seal Payment Succeeded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1088, 208],
+      "webhookId": "prisoncall-payment-succeeded"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": { "responseCode": 200 }
+      },
+      "id": "0530f44f-5449-406b-b49c-5ada7c11ad5e",
+      "name": "Respond 200 SMS",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-832, -352]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": { "responseCode": 200 }
+      },
+      "id": "8d07de9c-6962-4a69-bc1d-771fabef5254",
+      "name": "Respond 200 Seal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-832, 112]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst smsText = (body.Body || '').trim().toUpperCase();\nconst fromNumber = (body.From || '').replace(/[\\s\\-]/g, '');\n\nif (smsText !== 'YES') return [];\n\nlet mobile = fromNumber;\nif (mobile.startsWith('+61')) mobile = mobile.substring(1);\n\nreturn [{\n  json: {\n    mobile_for_lookup: mobile,\n    from_number_e164: fromNumber\n  }\n}];"
+      },
+      "id": "32a2eaf1-5422-4c81-bfce-538e33e6769b",
+      "name": "Check YES SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-832, -208]
+    },
+    {
+      "parameters": {
+        "url": "=https://slebxcruigrpwjislmnl.supabase.co/rest/v1/subscriptions?assigned_mobile=eq.{{ $json.mobile_for_lookup }}&status=eq.PAUSED&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZWJ4Y3J1aWdycHdqaXNsbW5sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjAyOTk3MSwiZXhwIjoyMDk3NjA1OTcxfQ.e4S5geeWIx6XzUU5SLEyyLsk8aRTmK9WPPKKE2_v1X0" },
+            { "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZWJ4Y3J1aWdycHdqaXNsbW5sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjAyOTk3MSwiZXhwIjoyMDk3NjA1OTcxfQ.e4S5geeWIx6XzUU5SLEyyLsk8aRTmK9WPPKKE2_v1X0" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a77ff9a-4154-4be9-b053-43277beead75",
+      "name": "Find PAUSED Subscription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-576, -208]
+    },
+    {
+      "parameters": {
+        "jsCode": "const subsArray = $input.first().json;\nconst sub = Array.isArray(subsArray) ? (subsArray[0] || null) : null;\nif (!sub || !sub.seal_subscription_id) return [];\n\nconst checkYesSms = $('Check YES SMS').first().json;\nreturn [{\n  json: {\n    ...sub,\n    mobile_for_lookup: checkYesSms.mobile_for_lookup,\n    from_number_e164: checkYesSms.from_number_e164\n  }\n}];"
+      },
+      "id": "a1b2c3d4-1111-2222-3333-444455556666",
+      "name": "Route YES SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-336, -208]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://seal-subscriptions.com/api/v1/subscriptions/{{ $json.seal_subscription_id }}/subscription-process-charge",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Seal-Api-Token", "value": "zxv65mr0a0oh6w5tc79hqr3xp3q4dtrcnopf2l0f" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "billing_attempt_id", "value": "={{ $json.latest_billing_attempt_id || '' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "227e1dfc-6979-41a6-8292-ea1c33fdf119",
+      "name": "Seal Process Charge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, -208]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst header = $input.first().json.headers['x-seal-hmac-sha256'];\nconst crypto = require('crypto');\nconst secret = $vars.PRISONCALL_SEAL_API_SECRET;\nconst computed = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');\nif (header !== computed) throw new Error('HMAC verification failed');\n\nconst ba = body.billing_attempt || body;\nconst sub = ba.subscription || {};\nconst customer = sub.customer || {};\n\nlet mobile = (customer.phone || customer.mobile || '').replace(/[\\s\\-]/g, '');\nif (mobile.startsWith('+61')) mobile = mobile.substring(1);\nelse if (mobile.startsWith('0')) mobile = '61' + mobile.substring(1);\n\nconst mobileLocal = '0' + mobile.substring(2);\nconst mobileDisplay = mobileLocal.replace(/(\\d{4})(\\d{3})(\\d{3})/, '$1 $2 $3');\n\nreturn [{\n  json: {\n    seal_subscription_id: String(sub.id || ba.subscription_id || ''),\n    customer_name: ((customer.first_name || '') + ' ' + (customer.last_name || '')).trim(),\n    customer_email: customer.email || '',\n    customer_mobile: mobile,\n    customer_mobile_display: mobileDisplay,\n    customer_mobile_e164: '+' + mobile\n  }\n}];"
+      },
+      "id": "272ace03-6b95-4f66-b113-cec5fe33624b",
+      "name": "Verify HMAC Seal Succeeded",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-832, 256]
+    },
+    {
+      "parameters": {
+        "url": "=https://slebxcruigrpwjislmnl.supabase.co/rest/v1/subscriptions?seal_subscription_id=eq.{{ $json.seal_subscription_id }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZWJ4Y3J1aWdycHdqaXNsbW5sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjAyOTk3MSwiZXhwIjoyMDk3NjA1OTcxfQ.e4S5geeWIx6XzUU5SLEyyLsk8aRTmK9WPPKKE2_v1X0" },
+            { "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZWJ4Y3J1aWdycHdqaXNsbW5sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjAyOTk3MSwiZXhwIjoyMDk3NjA1OTcxfQ.e4S5geeWIx6XzUU5SLEyyLsk8aRTmK9WPPKKE2_v1X0" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a19e72d2-1c95-44bc-b14b-7b3ecda51429",
+      "name": "Get Subscription for DID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-576, 256]
+    },
+    {
+      "parameters": {
+        "jsCode": "const extracted = $('Verify HMAC Seal Succeeded').first().json;\nconst sub = $input.first().json[0] || {};\n\nconst did = sub.current_did || '';\nlet didDisplay = did;\nif (did.startsWith('61') && did.length === 11) {\n  const local = '0' + did.substring(2);\n  didDisplay = local.replace(/(\\d{2})(\\d{4})(\\d{4})/, '$1 $2 $3');\n}\n\nconst assignedMobile = sub.assigned_mobile || '';\nconst assignedMobileE164 = assignedMobile ? ('+' + assignedMobile) : (extracted.customer_mobile_e164 || '');\nlet assignedMobileDisplay = '';\nif (assignedMobile.length === 11 && assignedMobile.startsWith('61')) {\n  const local = '0' + assignedMobile.substring(2);\n  assignedMobileDisplay = local.replace(/(\\d{4})(\\d{3})(\\d{3})/, '$1 $2 $3');\n}\n\nreturn [{\n  json: {\n    ...extracted,\n    current_did: did,\n    did_display: didDisplay,\n    prison_name: sub.prison_name || '',\n    assigned_mobile: assignedMobile,\n    assigned_mobile_e164: assignedMobileE164,\n    assigned_mobile_display: assignedMobileDisplay\n  }\n}];"
+      },
+      "id": "e289a790-c21a-4187-b507-e15e8573578d",
+      "name": "Merge DID Succeeded",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-336, 256]
+    },
+    {
+      "parameters": {
+        "toRecipients": "gc@thefreebirdandco.com.au",
+        "subject": "={{ 'PAYMENT CLEARED - ' + $('Merge DID Succeeded').first().json.customer_name + ' - Action Required' }}",
+        "bodyContent": "={{ '<h2>Payment Cleared \u2014 Action Required</h2><p>The failed payment for this subscriber has cleared. You must now:</p><ol><li><strong>Resume the VoipLine DID licence</strong> for this subscriber.</li><li><strong>Open the admin portal \u2192 find this subscriber \u2192 click Resume Account.</strong> This will automatically notify the customer that their number is active again.</li></ol><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Customer</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.customer_name + '</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Email</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.customer_email + '</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Assigned Mobile</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.assigned_mobile_display + '</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>DID (display)</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.did_display + '</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>DID (VoipLine copy)</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.current_did + '</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Prison</strong></td><td style=\"padding:8px;border:1px solid #ddd\">' + $('Merge DID Succeeded').first().json.prison_name + '</td></tr></table>' }}",
+        "additionalFields": {
+          "ccRecipients": "dt@thefreebirdandco.com.au",
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [-80, 256],
+      "id": "f4e3d2c1-b0a9-4876-fedc-ba0987654321",
+      "name": "Email Both Admins Payment Cleared",
+      "webhookId": "c3b2a1f0-e9d8-4765-abcd-ef2345678901",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OkUo64xUqWHabpWH",
+          "name": "Prisoncall - Outlook (noreply)"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Twilio Inbound SMS": {
+      "main": [[
+        { "node": "Respond 200 SMS", "type": "main", "index": 0 },
+        { "node": "Check YES SMS", "type": "main", "index": 0 }
+      ]]
+    },
+    "Check YES SMS": {
+      "main": [[{ "node": "Find PAUSED Subscription", "type": "main", "index": 0 }]]
+    },
+    "Find PAUSED Subscription": {
+      "main": [[{ "node": "Route YES SMS", "type": "main", "index": 0 }]]
+    },
+    "Route YES SMS": {
+      "main": [[{ "node": "Seal Process Charge", "type": "main", "index": 0 }]]
+    },
+    "Webhook - Seal Payment Succeeded": {
+      "main": [[
+        { "node": "Respond 200 Seal", "type": "main", "index": 0 },
+        { "node": "Verify HMAC Seal Succeeded", "type": "main", "index": 0 }
+      ]]
+    },
+    "Verify HMAC Seal Succeeded": {
+      "main": [[{ "node": "Get Subscription for DID", "type": "main", "index": 0 }]]
+    },
+    "Get Subscription for DID": {
+      "main": [[{ "node": "Merge DID Succeeded", "type": "main", "index": 0 }]]
+    },
+    "Merge DID Succeeded": {
+      "main": [[{ "node": "Email Both Admins Payment Cleared", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1", "binaryMode": "separate" },
+  "versionId": "e5f6a7b8-c9d0-1234-efab-345678901235",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd4b7dbdcca17986ffa110e38b346083dd9ce1b207422b55fecee1c78ba346b7"
+  },
+  "nodeGroups": [],
+  "id": "kYXegr2Gjcu2Cg36",
+  "tags": []
+}
