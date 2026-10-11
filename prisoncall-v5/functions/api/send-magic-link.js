@@ -1,4 +1,4 @@
-export async function onRequestPost(context) {
+﻿export async function onRequestPost(context) {
   const { env, request } = context;
 
   const SUPABASE_URL = env.SUPABASE_URL;
@@ -82,13 +82,30 @@ export async function onRequestPost(context) {
     return json({ error: 'db_error' }, 500);
   }
 
-  const verifyUrl = `https://prisoncall.pages.dev/portal/verify?token=${token}`;
+  const verifyUrl = `${new URL(request.url).origin}/portal/verify?token=${token}`;
 
-  // STUB: Twilio not called — log only
-  console.log(
-    `MAGIC LINK SMS STUB — To: ${mobile} — Message: Your Prisoncall sign-in link: ${verifyUrl} — Expires in 15 minutes.`
+  const twilioSid = env.TWILIO_ACCOUNT_SID;
+  const twilioAuth = env.TWILIO_AUTH_TOKEN;
+  const twilioFrom = env.TWILIO_FROM_NUMBER;
+  const twilioRecipient = '+' + mobile;
+  const smsBody = `Your Prisoncall sign-in link: ${verifyUrl} Expires in 15 minutes.`;
+
+  const twilioRes = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ From: twilioFrom, To: twilioRecipient, Body: smsBody }),
+    }
   );
-  console.log(`VERIFY URL: ${verifyUrl}`);
+  if (!twilioRes.ok) {
+    const errText = await twilioRes.text();
+    console.error('Twilio SMS failed:', errText);
+    return json({ error: 'sms_failed' }, 500);
+  }
 
   return json({ success: true });
 }
