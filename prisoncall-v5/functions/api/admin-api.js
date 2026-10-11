@@ -269,6 +269,83 @@ export async function onRequest({ request, env }) {
         return json({ data: { ok: true } });
       }
 
+      case 'complete-transfer': {
+        await requireAuth();
+        const { id } = params;
+        if (!id) return json({ error: 'id required' }, 400);
+
+        const r = await sb(`transfers?id=eq.${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'COMPLETED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+        });
+        const data = await r.json();
+        if (!r.ok) return json({ error: data.message || 'Update failed' }, 500);
+
+        const transfer = Array.isArray(data) ? data[0] : data;
+
+        const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}&select=customer_name&limit=1`);
+        const subRows = await subRes.json();
+        const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
+
+        const assignedMobileDisplay = '0' + transfer.assigned_mobile.substring(2);
+        const smsBody = `TRANSFER COMPLETED - ${customerName} moved to ${transfer.requested_prison} (${transfer.requested_state}). Assigned mobile: ${assignedMobileDisplay}.`;
+
+        const twilioSid = env.TWILIO_ACCOUNT_SID;
+        const twilioAuth = env.TWILIO_AUTH_TOKEN;
+        const twilioFrom = env.TWILIO_SMS_NUMBER;
+
+        await Promise.all(['+61413598815', '+61422749601'].map(to =>
+          fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({ From: twilioFrom, To: to, Body: smsBody }),
+          })
+        ));
+
+        return json({ data: transfer });
+      }
+
+      case 'cancel-transfer': {
+        await requireAuth();
+        const { id } = params;
+        if (!id) return json({ error: 'id required' }, 400);
+
+        const r = await sb(`transfers?id=eq.${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'CANCELLED', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+        });
+        const data = await r.json();
+        if (!r.ok) return json({ error: data.message || 'Update failed' }, 500);
+
+        const transfer = Array.isArray(data) ? data[0] : data;
+
+        const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}&select=customer_name&limit=1`);
+        const subRows = await subRes.json();
+        const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
+
+        const smsBody = `TRANSFER CANCELLED - ${customerName} transfer to ${transfer.requested_prison} (${transfer.requested_state}) has been cancelled.`;
+
+        const twilioSid = env.TWILIO_ACCOUNT_SID;
+        const twilioAuth = env.TWILIO_AUTH_TOKEN;
+        const twilioFrom = env.TWILIO_SMS_NUMBER;
+
+        await Promise.all(['+61413598815', '+61422749601'].map(to =>
+          fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({ From: twilioFrom, To: to, Body: smsBody }),
+          })
+        ));
+
+        return json({ data: transfer });
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }

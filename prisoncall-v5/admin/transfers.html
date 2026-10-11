@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transfers — Prisoncall Admin</title>
+  <title>Transfers &#x2014; Prisoncall Admin</title>
   <script>if('serviceWorker'in navigator)navigator.serviceWorker.getRegistrations().then(r=>r.forEach(sw=>sw.unregister()));</script>
   <meta name="robots" content="noindex,nofollow">
   <link rel="icon" href="/assets/brand_logos/Prisoncall_Favicon_Circle_Black.png">
@@ -11,13 +11,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=12">
-  <style>
-    .expand-row { display: none; }
-    .expand-row.open { display: table-row; }
-    .expand-content { padding: 20px 24px; background: #FAFBFF; border-bottom: 1px solid var(--color-border); }
-    .expand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    @media (max-width: 768px) { .expand-grid { grid-template-columns: 1fr; } }
-  </style>
 </head>
 <body class="admin-body">
 
@@ -28,7 +21,7 @@
     <a href="/admin/subscribers.html" class="sidebar-logo">
       <img src="/assets/brand_logos/Prisoncall_White.svg" alt="Prisoncall" width="140" height="17" style="height:17px;width:auto;max-width:160px">
     </a>
-    <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">✕</button>
+    <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">&#x2715;</button>
   </div>
   <nav class="sidebar-nav">
     <a href="/admin/subscribers.html" class="sidebar-link" data-page="subscribers">
@@ -61,436 +54,95 @@
     </div>
   </header>
 
-  <div class="filter-bar">
-    <div class="filter-tabs" id="filterTabs">
-      <button class="filter-tab active" data-status="">All</button>
-      <button class="filter-tab" data-status="PENDING">Pending</button>
-      <button class="filter-tab" data-status="WINDOW_OPEN">Window Open</button>
-      <button class="filter-tab" data-status="COMPLETED">Completed</button>
-    </div>
-    <div class="search-box" style="margin-left:auto">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
-      <input type="search" id="searchInput" placeholder="Name, prison…" autocomplete="off">
-    </div>
-  </div>
-
   <div class="page-body">
     <div class="table-wrap">
-      <table class="admin-table" id="txTable">
+      <table class="admin-table" id="transfersTable">
         <thead>
           <tr>
-            <th>Date Requested</th>
-            <th>Customer</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Status</th>
+            <th>Name</th>
+            <th>Assigned Mobile</th>
+            <th>Requested Prison</th>
+            <th>State</th>
+            <th>Submitted At</th>
             <th></th>
           </tr>
         </thead>
-        <tbody id="txBody">
-          <tr class="loading-row"><td colspan="6"><span class="spinner"></span>Loading transfers…</td></tr>
+        <tbody id="transfersBody">
+          <tr class="loading-row"><td colspan="6"><span class="spinner"></span>Loading transfers&hellip;</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="m-card-list" id="txCards"></div>
   </div>
 </main>
 
 <script type="module">
-import {
-  initAdminPage, api, formatDID, formatMobile, fmtDate,
-  statusPill, derivePBXName, copyText, validateDID, showToast, esc
-} from '/admin/admin-supabase.js';
+import { initAdminPage, api, formatMobile, fmtDateTime, esc, showToast } from '/admin/admin-supabase.js';
 
 await initAdminPage();
 
-/* Convert any DID format to E.164 "61XXXXXXXXX" (no + or leading 0) */
-function didToE164(did) {
-  if (!did) return '';
-  const d = String(did).replace(/\D/g, '');
-  if (d.startsWith('61') && d.length === 11) return d;
-  if (d.startsWith('0') && d.length === 10) return '61' + d.slice(1);
-  return d;
-}
+let pending = [];
 
-let allTx    = [];
-let filtered = [];
-let activeStatus = '';
-let searchTerm   = '';
-let expandedId   = null;
-let exchangeCache = {};
-
-async function loadTx() {
+async function loadTransfers() {
   try {
-    allTx = await api('get-transfers');
-    applyFilters();
+    const data = await api('get-transfers');
+    pending = (Array.isArray(data) ? data : []).filter(t => t.status === 'PENDING_VOIPLINE');
+    renderTable();
   } catch (err) {
-    document.getElementById('txBody').innerHTML =
-      `<tr class="empty-row"><td colspan="6">Failed to load: ${esc(err.message)}</td></tr>`;
+    document.getElementById('transfersBody').innerHTML =
+      `<tr class="empty-row"><td colspan="6">Failed to load transfers: ${esc(err.message)}</td></tr>`;
   }
-}
-
-function applyFilters() {
-  const q = searchTerm.toLowerCase().trim();
-  filtered = allTx.filter(t => {
-    const subName = t.subscriptions?.customer_name || '';
-    if (activeStatus && t.status !== activeStatus) return false;
-    if (q) {
-      const hay = [subName, t.new_prison_name, t.old_prison_name].join(' ').toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-  renderTable();
 }
 
 function renderTable() {
-  const isMobile = window.innerWidth <= 768;
-  document.getElementById('countBadge').textContent = `${filtered.length} transfer${filtered.length !== 1 ? 's' : ''}`;
+  const badge = document.getElementById('countBadge');
+  badge.textContent = `${pending.length} pending transfer${pending.length !== 1 ? 's' : ''}`;
 
-  if (isMobile) {
-    document.querySelector('.table-wrap').style.display = 'none';
-    const cardsEl = document.getElementById('txCards');
-    cardsEl.style.display = '';
-    renderTxCards(cardsEl);
+  const tbody = document.getElementById('transfersBody');
+  if (!pending.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">No pending transfers.</td></tr>`;
     return;
   }
 
-  document.querySelector('.table-wrap').style.display = '';
-  document.getElementById('txCards').style.display = 'none';
-
-  const tbody = document.getElementById('txBody');
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">No transfers found</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(t => {
-    const sub    = t.subscriptions || {};
-    const name   = sub.customer_name || '—';
-    const oldP   = t.old_prison_name ? `${t.old_prison_name}${t.old_prison_state ? ', '+t.old_prison_state.toUpperCase() : ''}` : '—';
-    const newP   = t.new_prison_name ? `${t.new_prison_name}${t.new_prison_state ? ', '+t.new_prison_state.toUpperCase() : ''}` : '—';
-    const isOpen = expandedId === t.id;
-
-    return `<tr class="row-clickable${isOpen ? ' row-expanded' : ''}" data-txid="${esc(t.id)}">
-        <td class="td-muted">${fmtDate(t.created_at)}</td>
-        <td class="td-name">${esc(name)}</td>
-        <td style="font-size:13px;color:#6B7280">${esc(oldP)}</td>
-        <td style="font-size:13px;font-weight:600">${esc(newP)}</td>
-        <td>${statusPill(t.status)}</td>
-        <td style="text-align:right;padding-right:20px;font-size:18px;color:#6B7280;transition:transform .2s">
-          <span style="display:inline-block;transform:rotate(${isOpen?'90':'0'}deg)">›</span>
-        </td>
-      </tr>
-      <tr class="expand-row${isOpen ? ' open' : ''}" data-expand="${esc(t.id)}">
-        <td colspan="6">
-          <div class="expand-content" id="expand-${esc(t.id)}">
-            ${isOpen ? renderExpandContent(t) : '<span class="spinner"></span>'}
-          </div>
-        </td>
-      </tr>`;
+  tbody.innerHTML = pending.map(t => {
+    const name   = esc(t.subscriptions?.customer_name || t.assigned_mobile || '\u2014');
+    const mobile = esc(formatMobile(t.assigned_mobile));
+    const prison = esc(t.requested_prison || '\u2014');
+    const state  = esc(t.requested_state  || '\u2014');
+    const date   = esc(fmtDateTime(t.created_at));
+    return `<tr>
+      <td class="td-name">${name}</td>
+      <td style="white-space:nowrap">${mobile}</td>
+      <td>${prison}</td>
+      <td>${state}</td>
+      <td class="td-muted">${date}</td>
+      <td style="white-space:nowrap;text-align:right;padding-right:12px">
+        <button class="btn btn--primary btn--sm btn-complete" data-id="${esc(t.id)}" style="margin-right:6px">Mark Completed</button>
+        <button class="btn btn--danger btn--sm btn-cancel" data-id="${esc(t.id)}">Mark Cancelled</button>
+      </td>
+    </tr>`;
   }).join('');
 
-  tbody.querySelectorAll('tr.row-clickable[data-txid]').forEach(tr => {
-    tr.addEventListener('click', () => toggleExpand(tr.dataset.txid));
+  tbody.querySelectorAll('.btn-complete').forEach(btn => {
+    btn.addEventListener('click', () => handleAction('complete-transfer', btn.dataset.id, btn));
   });
-
-  if (expandedId) bindExpandActions(expandedId);
-}
-
-function renderTxCards(el) {
-  if (!filtered.length) {
-    el.innerHTML = `<p class="m-card-empty">No transfers found</p>`;
-    return;
-  }
-  el.innerHTML = filtered.map(t => {
-    const sub    = t.subscriptions || {};
-    const name   = sub.customer_name || '—';
-    const oldP   = t.old_prison_name ? `${t.old_prison_name}${t.old_prison_state ? ', '+t.old_prison_state.toUpperCase() : ''}` : '—';
-    const newP   = t.new_prison_name ? `${t.new_prison_name}${t.new_prison_state ? ', '+t.new_prison_state.toUpperCase() : ''}` : '—';
-    const isOpen = expandedId === t.id;
-
-    return `
-      <div class="m-card${isOpen ? ' m-card--open' : ''}" data-txid="${esc(t.id)}">
-        <div class="m-card-top">
-          <div class="m-card-header">
-            <span class="m-card-name">${esc(name)}</span>
-            ${statusPill(t.status)}
-          </div>
-          <div class="m-card-body">
-            <div class="m-card-row">
-              <span class="m-card-label">From</span>
-              <span class="m-card-value">${esc(oldP)}</span>
-            </div>
-            <div class="m-card-row">
-              <span class="m-card-label">To</span>
-              <span class="m-card-value" style="font-weight:600;color:var(--color-green)">${esc(newP)}</span>
-            </div>
-          </div>
-          <div class="m-card-footer">
-            <span class="m-card-date">${fmtDate(t.created_at)}</span>
-            <span class="m-card-arrow" style="transform:rotate(${isOpen ? '90' : '0'}deg)">›</span>
-          </div>
-        </div>
-        ${isOpen ? `<div class="m-card-expand" id="m-expand-${esc(t.id)}">
-          ${renderExpandContent(t, 'm-')}
-        </div>` : ''}
-      </div>`;
-  }).join('');
-
-  el.querySelectorAll('.m-card[data-txid]').forEach(card => {
-    card.querySelector('.m-card-top').addEventListener('click', () => toggleExpand(card.dataset.txid));
+  tbody.querySelectorAll('.btn-cancel').forEach(btn => {
+    btn.addEventListener('click', () => handleAction('cancel-transfer', btn.dataset.id, btn));
   });
-
-  if (expandedId) bindExpandActions(expandedId, 'm-');
 }
 
-async function toggleExpand(txId) {
-  if (expandedId === txId) {
-    expandedId = null;
-    renderTable();
-    return;
-  }
-  expandedId = txId;
-  renderTable();
-
-  // Load exchange guidance for new prison if not yet cached
-  const t = allTx.find(x => x.id === txId);
-  if (t && t.new_prison_name && !exchangeCache[t.new_prison_name]) {
-    try {
-      const ex = await api('get-prison-lookup', { prison_name: t.new_prison_name });
-      exchangeCache[t.new_prison_name] = ex || null;
-      const p  = window.innerWidth <= 768 ? 'm-' : '';
-      const el = document.getElementById(p ? `m-expand-${txId}` : `expand-${txId}`);
-      if (el) el.innerHTML = renderExpandContent(t, p);
-      bindExpandActions(txId, p);
-    } catch {}
-  }
-}
-
-function renderExpandContent(t, p = '') {
-  const sub      = t.subscriptions || {};
-  const pbxName  = derivePBXName(sub);
-  const assignedM = formatMobile(t.assigned_mobile);
-  const oldDID   = t.old_did || '—';
-  const exchange = exchangeCache[t.new_prison_name];
-
-  const exchangeHtml = (() => {
-    if (!exchange) return `<p style="font-size:13px;color:#6B7280">No town data found for this prison. Upload updated CSV via Settings.</p>`;
-    const town = exchange.primary_town;
-    if (!town) return `<p style="font-size:13px;color:#6B7280">No town data found for this prison. Upload updated CSV via Settings.</p>`;
-    return `<p style="font-size:14px;color:#111827;margin-bottom:4px">Search <strong>${esc(town)}</strong> in VoipLine to find available DIDs for this prison.</p>`;
-  })();
-
-  const isPending    = t.status === 'PENDING';
-  const isWindowOpen = t.status === 'WINDOW_OPEN';
-
-  return `
-    <div class="expand-grid">
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="info-row">
-          <span class="info-label">Old DID</span>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-            <span class="info-value info-value--mono">${esc(formatDID(t.old_did))}</span>
-            <button class="copy-btn" data-copy-text="${esc(didToE164(t.old_did))}" data-copy-btn>Copy</button>
-          </div>
-        </div>
-        <div class="info-row">
-          <span class="info-label">VoipLine Name</span>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-            <span class="info-value info-value--mono">${esc(pbxName)}</span>
-            <button class="copy-btn" data-copy-text="${esc(pbxName)}" data-copy-btn>Copy</button>
-          </div>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Assigned Mobile</span>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-            <span class="info-value info-value--mono">${esc(assignedM)}</span>
-            <button class="copy-btn" data-copy-text="${esc(assignedM)}" data-copy-btn>Copy</button>
-          </div>
-        </div>
-
-        ${isPending ? `
-        <div class="form-group" style="margin-top:4px">
-          <label class="form-label" for="${p}newDid-${esc(t.id)}">New Prisoncall Number (DID)</label>
-          <input class="form-input" id="${p}newDid-${esc(t.id)}" placeholder="03 XXXX XXXX" maxlength="13" inputmode="numeric" value="${esc(t.new_did ? formatDID(t.new_did) : '')}">
-          <p class="form-hint">Paste in any format — auto-converts to local. Stored as E.164 (61XXXXXXXXX).</p>
-          <p class="form-error" id="${p}txErr-${esc(t.id)}">Must be a valid 10-digit Australian number</p>
-        </div>
-        <button class="btn btn--primary btn--sm" id="${p}fulfilTxBtn-${esc(t.id)}">Fulfil Transfer</button>
-        ` : ''}
-
-        ${isWindowOpen ? `
-        <div style="background:var(--color-amber-pale);border:1px solid #FDE68A;border-radius:8px;padding:14px">
-          <p style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:4px">7-day overlap window active</p>
-          ${t.window_expires_at ? `<p style="font-size:12px;color:#92400E">Window closes: ${new Date(t.window_expires_at).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}</p>` : ''}
-          <p style="font-size:13px;color:#92400E;margin-top:4px">Old DID stays active while the new number is registered. Click below once you have released it in VoipLine.</p>
-        </div>
-        <div class="info-row">
-          <span class="info-label">New DID (active)</span>
-          <span class="info-value info-value--mono">${esc(formatDID(t.new_did))}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Old DID (still live)</span>
-          <span class="info-value info-value--mono">${esc(formatDID(t.old_did))}</span>
-        </div>
-        <button class="btn btn--outline btn--sm" id="${p}releaseDIDBtn-${esc(t.id)}">Old DID Released in VoipLine</button>
-        ` : ''}
-
-        <div class="form-group">
-          <label class="form-label">Admin Notes</label>
-          <textarea class="form-input" id="${p}txNotes-${esc(t.id)}" placeholder="Notes about this transfer…">${esc(t.admin_notes || '')}</textarea>
-          <span class="save-indicator" id="${p}txNotesSaved-${esc(t.id)}">Saved</span>
-        </div>
-      </div>
-
-      <div>
-        <div class="exchange-box">
-          <p class="exchange-title">DID Lookup</p>
-          ${exchangeHtml}
-        </div>
-      </div>
-    </div>`;
-}
-
-function bindExpandActions(txId, p = '') {
-  const elId = p ? `m-expand-${txId}` : `expand-${txId}`;
-  const el = document.getElementById(elId);
-  if (!el) return;
-
-  // Copy buttons
-  el.querySelectorAll('[data-copy-btn]').forEach(btn => {
-    btn.addEventListener('click', () => copyText(btn.dataset.copyText, btn));
-  });
-
-  // New DID input — auto-format on paste/type: strip country code, add leading 0, insert spaces
-  const didInput = document.getElementById(`${p}newDid-${txId}`);
-  if (didInput) {
-    didInput.addEventListener('input', () => {
-      const digits = didInput.value.replace(/\D/g, '');
-      // If pasted as E.164 (61XXXXXXXXX), convert to local (0XXXXXXXXX)
-      let local = digits.startsWith('61') && digits.length >= 3
-        ? '0' + digits.slice(2)
-        : digits;
-      local = local.slice(0, 10);
-      // Format as 0X XXXX XXXX
-      let formatted;
-      if (local.length > 6)      formatted = `${local.slice(0,2)} ${local.slice(2,6)} ${local.slice(6)}`;
-      else if (local.length > 2) formatted = `${local.slice(0,2)} ${local.slice(2)}`;
-      else                       formatted = local;
-      didInput.value = formatted;
-    });
-  }
-
-  // Fulfil transfer
-  const fulfilBtn = document.getElementById(`${p}fulfilTxBtn-${txId}`);
-  if (fulfilBtn) {
-    fulfilBtn.addEventListener('click', () => handleFulfilTransfer(txId, p));
-  }
-
-  // Release DID
-  const releaseBtn = document.getElementById(`${p}releaseDIDBtn-${txId}`);
-  if (releaseBtn) {
-    releaseBtn.addEventListener('click', () => handleReleaseDID(txId));
-  }
-
-  // Notes auto-save
-  const notesEl = document.getElementById(`${p}txNotes-${txId}`);
-  if (notesEl) {
-    notesEl.addEventListener('blur', async () => {
-      try {
-        await api('update-transfer', { id: txId, admin_notes: notesEl.value });
-        const ind = document.getElementById(`${p}txNotesSaved-${txId}`);
-        if (ind) { ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 2000); }
-      } catch { showToast('Failed to save notes', 'error'); }
-    });
-  }
-}
-
-async function handleFulfilTransfer(txId, p = '') {
-  const input = document.getElementById(`${p}newDid-${txId}`);
-  const errEl = document.getElementById(`${p}txErr-${txId}`);
-
-  // Convert display format (03 XXXX XXXX) to E.164 (61XXXXXXXXX) before validating
-  const raw = (input?.value || '').replace(/\D/g, '');
-  let val;
-  if (raw.startsWith('61') && raw.length === 11)   val = raw;           // already E.164
-  else if (raw.startsWith('0') && raw.length === 10) val = '61' + raw.slice(1); // local → E.164
-  else                                               val = raw;
-
-  errEl?.classList.remove('visible');
-  if (!validateDID(val)) {
-    errEl?.classList.add('visible');
-    input?.focus();
-    return;
-  }
-
-  const btn = document.getElementById(`${p}fulfilTxBtn-${txId}`);
-  btn.disabled = true; btn.textContent = 'Saving…';
-
+async function handleAction(action, id, btn) {
+  btn.disabled = true;
   try {
-    const now      = new Date();
-    const expires  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    await api('update-transfer', {
-      id: txId,
-      new_did: val,
-      status: 'WINDOW_OPEN',
-      fulfilled_at: now.toISOString(),
-      window_expires_at: expires.toISOString(),
-    });
-    const t = allTx.find(x => x.id === txId);
-    if (t) { t.new_did = val; t.status = 'WINDOW_OPEN'; t.fulfilled_at = now.toISOString(); t.window_expires_at = expires.toISOString(); }
-    showToast('Transfer fulfilled - 7-day window open', 'success');
-    applyFilters();
+    await api(action, { id });
+    showToast(action === 'complete-transfer' ? 'Transfer marked completed.' : 'Transfer cancelled.', 'success');
+    await loadTransfers();
   } catch (err) {
-    showToast(err.message || 'Failed to fulfil transfer', 'error');
-    btn.disabled = false; btn.textContent = 'Fulfil Transfer';
+    showToast(err.message || 'Action failed.', 'error');
+    btn.disabled = false;
   }
 }
 
-async function handleReleaseDID(txId) {
-  if (!confirm('Confirm: have you released the old DID in VoipLine?')) return;
-
-  const btn = document.getElementById(`releaseDIDBtn-${txId}`);
-  btn.disabled = true; btn.textContent = 'Saving…';
-
-  try {
-    const now = new Date().toISOString();
-    await api('update-transfer', { id: txId, status: 'COMPLETED', old_did_released_at: now });
-    const t = allTx.find(x => x.id === txId);
-    if (t) { t.status = 'COMPLETED'; t.old_did_released_at = now; }
-    showToast('Old DID released - transfer completed', 'success');
-    expandedId = null;
-    applyFilters();
-  } catch (err) {
-    showToast(err.message || 'Failed to update', 'error');
-    btn.disabled = false; btn.textContent = 'Old DID Released';
-  }
-}
-
-// Filter tabs
-document.getElementById('filterTabs').addEventListener('click', e => {
-  const tab = e.target.closest('.filter-tab');
-  if (!tab) return;
-  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-  tab.classList.add('active');
-  activeStatus = tab.dataset.status;
-  applyFilters();
-});
-
-// Search
-document.getElementById('searchInput').addEventListener('input', e => {
-  searchTerm = e.target.value;
-  applyFilters();
-});
-
-loadTx();
-
-let _rszTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(_rszTimer);
-  _rszTimer = setTimeout(applyFilters, 150);
-});
+loadTransfers();
 </script>
 </body>
 </html>
