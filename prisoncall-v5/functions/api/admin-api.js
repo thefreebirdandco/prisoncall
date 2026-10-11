@@ -150,12 +150,48 @@ export async function onRequest({ request, env }) {
           if (key in updates) patch[key] = updates[key];
         }
 
+        // If activating, fetch current status/mobile first so we can detect PAUSED→ACTIVE
+        let prevSub = null;
+        if (patch.status === 'ACTIVE') {
+          const prevRes = await sb(`subscriptions?id=eq.${id}&select=status,assigned_mobile,customer_name&limit=1`);
+          const prevRows = await prevRes.json();
+          prevSub = Array.isArray(prevRows) ? prevRows[0] : null;
+        }
+
         const r = await sb(`subscriptions?id=eq.${id}`, {
           method: 'PATCH',
           body: JSON.stringify(patch),
         });
         const data = await r.json();
         if (!r.ok) return json({ error: data.message || 'Update failed' }, 500);
+
+        // Fire PAUSED→ACTIVE notifications (non-blocking)
+        if (prevSub?.status === 'PAUSED' && patch.status === 'ACTIVE') {
+          const twilioSid  = env.TWILIO_ACCOUNT_SID;
+          const twilioAuth = env.TWILIO_AUTH_TOKEN;
+          const twilioFrom = env.TWILIO_SMS_NUMBER;
+          const customerTo = '+' + prevSub.assigned_mobile;
+          const customerName = prevSub.customer_name || prevSub.assigned_mobile;
+
+          const sendSms = (to, body) => fetch(
+            `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({ From: twilioFrom, To: to, Body: body }),
+            }
+          );
+
+          Promise.all([
+            sendSms(customerTo, 'Your payment cleared. Your Prisoncall number is active again.'),
+            sendSms('+61413598815', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
+            sendSms('+61422749601', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
+          ]).catch(err => console.error('PAUSED→ACTIVE SMS error:', err));
+        }
+
         return json({ data: Array.isArray(data) ? data[0] : data });
       }
 
