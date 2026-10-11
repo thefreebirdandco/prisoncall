@@ -86,7 +86,7 @@
 
   const twilioSid = env.TWILIO_ACCOUNT_SID;
   const twilioAuth = env.TWILIO_AUTH_TOKEN;
-  const twilioFrom = env.TWILIO_FROM_NUMBER;
+  const twilioFrom = env.TWILIO_SMS_NUMBER;
   const twilioRecipient = '+' + mobile;
   const smsBody = `Your Prisoncall sign-in link: ${verifyUrl} Expires in 15 minutes.`;
 
