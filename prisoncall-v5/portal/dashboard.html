@@ -722,20 +722,20 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
               if (data.ok) {
-                self.textContent = 'Done \u2014 check your email for the secure link.';
-                self.style.color = '#1a5c33';
+                self.textContent = 'Done, check your email for the secure link.';
+                self.style.color = '#00D258';
                 self.disabled = true;
               } else {
                 self.textContent = origText;
                 self.disabled = false;
-                showCardMsg(subId, 'Something went wrong. Please try again.', 'error');
+                showCardMsg(subId, 'Oops, we could not find an active plan on your account. <a href="https://prisoncall.com.au/choose-plan" style="color:inherit;text-decoration:underline;">Get a new plan</a> or <a href="https://prisoncall.com.au/contact" style="color:inherit;text-decoration:underline;">contact us</a> for help.', 'error');
                 setTimeout(function () { clearCardMsg(subId); }, 6000);
               }
             })
             .catch(function () {
               self.textContent = origText;
               self.disabled = false;
-              showCardMsg(subId, 'Network error. Please try again.', 'error');
+              showCardMsg(subId, 'Something went wrong connecting to our server. Please try again or visit <a href="https://prisoncall.com.au/contact" style="color:inherit;text-decoration:underline;">prisoncall.com.au/contact</a> for help.', 'error');
               setTimeout(function () { clearCardMsg(subId); }, 6000);
             });
         });
@@ -782,7 +782,7 @@
     function showCardMsg(subId, text, type) {
       var el = document.getElementById('msg-' + subId);
       if (!el) return;
-      el.textContent = text;
+      el.innerHTML = text;
       el.className = 'card-message is-visible card-message--' + type;
     }
 
