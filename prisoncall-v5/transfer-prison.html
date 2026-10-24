@@ -75,22 +75,8 @@
       display: grid; grid-template-columns: 44px 1fr 44px;
       align-items: center; height: 100%;
     }
-    .header__left-icon {
-      display: none;
-      width: 44px;
-      height: 44px;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .header__left-icon .header__icon-img {
-      width: 24px;
-      height: 24px;
-    }
-    @media (min-width: 768px) {
-      .header__left-icon {
-        display: flex;
-      }
+    @media (min-width:768px) {
+      .header__left-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; }
     }
     .header__center { display: flex; align-items: center; justify-content: center; position: relative; height: 100%; overflow: hidden; }
     .header__wordmark { display: flex; align-items: center; transition: opacity var(--tr); }
@@ -391,7 +377,7 @@
   <header class="header header--scrolled" id="siteHeader">
     <div class="container header__inner">
       <a href="index.html" class="header__left-icon" aria-label="Prisoncall Australia — home">
-        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" class="header__icon-img">
+        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" style="width:24px;height:24px;">
       </a>
       <div class="header__center">
         <a href="index.html" class="header__wordmark" aria-label="Prisoncall Australia — home">
@@ -410,6 +396,7 @@
     </div>
   </header>
 
+  <!-- ═══ MOBILE MENU ═══ -->
 
   <!-- ═══ MAIN ═══ -->
   <main>

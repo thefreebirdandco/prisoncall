@@ -97,22 +97,8 @@
       display: grid; grid-template-columns: 44px 1fr 44px;
       align-items: center; height: 100%;
     }
-    .header__left-icon {
-      display: none;
-      width: 44px;
-      height: 44px;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .header__left-icon .header__icon-img {
-      width: 24px;
-      height: 24px;
-    }
-    @media (min-width: 768px) {
-      .header__left-icon {
-        display: flex;
-      }
+    @media (min-width:768px) {
+      .header__left-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; }
     }
     .header__center { display: flex; align-items: center; justify-content: center; position: relative; height: 100%; overflow: hidden; }
     .header__wordmark { display: flex; align-items: center; transition: opacity var(--tr); }
@@ -145,12 +131,10 @@
       .header__icon-link { display: none; }
       .header__desktop-cta { display: block; }
       .header__desktop-cta .btn { padding: 12px 24px; font-size: 15px; }
-
-      /* Desktop scrolled: CTA turns green */
+      /* CTA always green here â€” user is in purchase flow */
+      .header__desktop-cta .btn,
       .header--scrolled .header__desktop-cta .btn {
-        background: var(--color-green);
-        color: var(--color-black);
-        border-color: var(--color-green);
+        background: var(--color-green); color: var(--color-black); border-color: var(--color-green);
       }
     }
 
@@ -1018,7 +1002,6 @@
     }
     .bundle-modal__btn:hover { opacity: 0.82; }
 
-
     /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
        YOUI-STYLE ROUNDED SECTION PANELS â€” DESKTOP ONLY
        Mobile layout is completely unchanged.
@@ -1411,7 +1394,7 @@
   <header class="header header--scrolled" id="siteHeader">
     <div class="container header__inner">
       <a href="index.html" class="header__left-icon" aria-label="Prisoncall Australia — home">
-        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" class="header__icon-img">
+        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" style="width:24px;height:24px;">
       </a>
       <div class="header__center">
         <a href="index.html" class="header__wordmark" aria-label="Prisoncall Australia â€” home">
@@ -1431,6 +1414,7 @@
     </div>
   </header>
 
+  <!-- â•â•â• MOBILE MENU â•â•â• -->
 
   <!-- â•â•â• MAIN â•â•â• -->
   <main>
@@ -1799,7 +1783,6 @@
   /* â”€â”€â”€ Copyright year â”€â”€â”€ */
   document.getElementById('copyrightYear').textContent = new Date().getFullYear();
 
-
   function isChoosePlanPage() {
     var path = (window.location.pathname || '').replace(/\\/g, '/');
     var segments = path.split('/').filter(function(s) { return s.length; });
@@ -1808,6 +1791,16 @@
     if (/choose-plan(\.html)?(\?|#|$)/i.test(window.location.href || '')) return true;
     return false;
   }
+  document.addEventListener('click', function(e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href="choose-plan.html"]');
+    if (!a || !mobileMenu.contains(a)) return;
+    if (!isChoosePlanPage()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, true);
+
   /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      DATA
   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
@@ -2425,7 +2418,6 @@
       '</div>'
     ].join('');
   }
-
 
   function buildStep4El(expandedKey){
     /* expandedKey: null = Phase A; plan key = Phase B expanded.
@@ -3439,7 +3431,6 @@
       if(b2){ b2.parentNode.insertBefore(msg, b2.nextSibling); }
     });
   }
-
 
   /* Show / hide the Path C modal */
   function showPathCModal() {

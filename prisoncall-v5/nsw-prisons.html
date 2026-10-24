@@ -203,23 +203,10 @@
       height: 100%;
     }
 
-    .header__left-icon {
-      display: none;
-      width: 44px;
-      height: 44px;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+    @media (min-width:768px) {
+      .header__left-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; }
     }
-    .header__left-icon .header__icon-img {
-      width: 24px;
-      height: 24px;
-    }
-    @media (min-width: 768px) {
-      .header__left-icon {
-        display: flex;
-      }
-    }
+
     /* ── Col 2: Centre slot — holds wordmark (state 1) or mobile CTA (state 2) ── */
     .header__center {
       display: flex;
@@ -309,7 +296,6 @@
       /* Desktop CTA: always visible, black by default */
       .header__desktop-cta { display: block; }
       .header__desktop-cta .btn { padding: 12px 24px; font-size: 15px; }
-
       /* Desktop scrolled: CTA turns green */
       .header--scrolled .header__desktop-cta .btn {
         background: var(--color-green);
@@ -1122,7 +1108,7 @@
 
       <!-- Col 1: Hamburger (44px) -->
       <a href="index.html" class="header__left-icon" aria-label="Prisoncall Australia — home">
-        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" class="header__icon-img">
+        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" style="width:24px;height:24px;">
       </a>
 
       <!-- Col 2: Centre — wordmark (state 1) or mobile CTA (state 2) -->
@@ -1147,6 +1133,7 @@
     </div>
   </header>
 
+  <!-- ═══ MOBILE MENU ═══ -->
 
   <main>
 
@@ -1582,6 +1569,9 @@
 
       obs.observe(heroCta);
     })();
+
+      link.addEventListener('click', closeMenu);
+    });
 
     document.querySelectorAll('a.js-home-checker-focus').forEach(function(a) {
       a.addEventListener('click', function(e) {
