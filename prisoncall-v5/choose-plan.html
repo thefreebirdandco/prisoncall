@@ -86,59 +86,6 @@
     .btn--black { background: var(--color-black); color: var(--color-white); border: 2px solid var(--color-black); }
 
     /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       HEADER (identical to index.html)
-    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-    .header {
-      position: sticky; top: 0; z-index: 200;
-      background: var(--color-white); height: var(--header-height-mobile);
-      border-bottom: 1px solid var(--color-border);
-    }
-    .header__inner {
-      display: grid; grid-template-columns: 44px 1fr 44px;
-      align-items: center; height: 100%;
-    }
-    @media (min-width:768px) {
-      .header__left-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; }
-    }
-    .header__center { display: flex; align-items: center; justify-content: center; position: relative; height: 100%; overflow: hidden; }
-    .header__wordmark { display: flex; align-items: center; transition: opacity var(--tr); }
-    .header__wordmark img { height: 20px; width: auto; }
-    .header__mobile-cta {
-      position: absolute; left: 50%; transform: translateX(-50%);
-      opacity: 0; pointer-events: none; transition: opacity var(--tr);
-      padding: 9px 20px; font-size: 13px; font-weight: 700; font-family: var(--font-family);
-      white-space: nowrap; border-radius: var(--radius-pill);
-      background: var(--color-green); color: var(--color-black);
-      border: 2px solid var(--color-green); line-height: 1;
-    }
-    .header__right { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; }
-    .header__icon-link { display: flex; align-items: center; justify-content: center; opacity: 1; pointer-events: auto; transition: opacity var(--tr); }
-    .header__icon-img { width: 24px; height: 24px; }
-    .header__desktop-cta { display: none; }
-    /* This page always shows scrolled state (no hero) */
-    @media (max-width: 767px) {
-      .header--scrolled .header__wordmark { opacity: 0; pointer-events: none; }
-      .header--scrolled .header__mobile-cta { opacity: 1; pointer-events: auto; }
-    }
-    @media (min-width: 768px) {
-      .header { height: var(--header-height); }
-      .header__inner { grid-template-columns: 1fr auto 1fr; }
-      .header__center { justify-self: center; position: static; overflow: visible; }
-      .header__wordmark img { height: 32px; }
-      .header--scrolled .header__wordmark { opacity: 1; pointer-events: auto; }
-      .header__mobile-cta { display: none; }
-      .header__right { width: auto; justify-self: end; }
-      .header__icon-link { display: none; }
-      .header__desktop-cta { display: block; }
-      .header__desktop-cta .btn { padding: 12px 24px; font-size: 15px; }
-      /* CTA always green here â€” user is in purchase flow */
-      .header__desktop-cta .btn,
-      .header--scrolled .header__desktop-cta .btn {
-        background: var(--color-green); color: var(--color-black); border-color: var(--color-green);
-      }
-    }
-
-    /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
        FOOTER
     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
     .footer { background: var(--color-black); color: var(--color-white); padding: 56px 0 48px; }
@@ -1391,28 +1338,6 @@
 <body>
 
   <!-- â•â•â• HEADER â•â•â• -->
-  <header class="header header--scrolled" id="siteHeader">
-    <div class="container header__inner">
-      <a href="index.html" class="header__left-icon" aria-label="Prisoncall Australia — home">
-        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" style="width:24px;height:24px;">
-      </a>
-      <div class="header__center">
-        <a href="index.html" class="header__wordmark" aria-label="Prisoncall Australia â€” home">
-          <img src="assets/brand_logos/Prisoncall_Black.svg" alt="Prisoncall Australia">
-        </a>
-        <a href="choose-plan.html" class="header__mobile-cta">Get Prisoncall now</a>
-      </div>
-      <div class="header__right">
-        <!-- STANDING RULE: brand icon always links to index.html on every page â€” never blocked by JS -->
-        <a href="index.html" class="header__icon-link" aria-label="Prisoncall Australia â€” home">
-          <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="" class="header__icon-img">
-        </a>
-        <div class="header__desktop-cta">
-          <a href="choose-plan.html" class="btn btn--green">Get Prisoncall now</a>
-        </div>
-      </div>
-    </div>
-  </header>
 
   <!-- â•â•â• MOBILE MENU â•â•â• -->
 
@@ -1993,7 +1918,7 @@
   function scrollToEl(el, enableGate){
     if(!el) return;
     setTimeout(function(){
-      var headerH = document.getElementById('siteHeader').offsetHeight;
+      var headerH = 0;
       var top = Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - headerH - 16);
       window.scrollTo({ top: top, behavior:'smooth' });
       if(enableGate){
@@ -2630,7 +2555,7 @@
         ackBlock.classList.add('is-visible');
         if(window.innerWidth < 768){
           setTimeout(function(){
-            var headerH = document.getElementById('siteHeader').offsetHeight;
+            var headerH = 0;
             var top = ackBlock.getBoundingClientRect().top + window.pageYOffset - headerH - 8;
             window.scrollTo({ top: top, behavior: 'smooth' });
           }, 60);
