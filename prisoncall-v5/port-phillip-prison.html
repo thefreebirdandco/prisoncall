@@ -203,16 +203,23 @@
       height: 100%;
     }
 
-    /* ── Col 1: Hamburger ── */
-    .header__hamburger {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .header__left-icon {
+      display: none;
       width: 44px;
       height: 44px;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
-    .header__hamburger img { width: 24px; height: 24px; }
-
+    .header__left-icon .header__icon-img {
+      width: 24px;
+      height: 24px;
+    }
+    @media (min-width: 768px) {
+      .header__left-icon {
+        display: flex;
+      }
+    }
     /* ── Col 2: Centre slot — holds wordmark (state 1) or mobile CTA (state 2) ── */
     .header__center {
       display: flex;
@@ -302,67 +309,6 @@
       /* Desktop CTA: always visible, black by default */
       .header__desktop-cta { display: block; }
       .header__desktop-cta .btn { padding: 12px 24px; font-size: 15px; }
-      /* Desktop scrolled: CTA turns green */
-      .header--scrolled .header__desktop-cta .btn {
-        background: var(--color-green);
-        color: var(--color-black);
-        border-color: var(--color-green);
-      }
-    }
-
-    /* ═══════════════════════════════════
-       MOBILE MENU — full-screen overlay
-    ═══════════════════════════════════ */
-    .mobile-menu {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 300;
-      background: var(--color-white);
-      flex-direction: column;
-    }
-    .mobile-menu.is-open { display: flex; }
-    .mobile-menu__top {
-      display: grid;
-      grid-template-columns: 44px 1fr 44px;
-      align-items: center;
-      height: var(--header-height-mobile);
-      border-bottom: 1px solid var(--color-border);
-      padding: 0 16px;
-      flex-shrink: 0;
-    }
-    .mobile-menu__close {
-      width: 44px; height: 44px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 400; color: var(--color-black);
-      justify-self: start;
-    }
-    .mobile-menu__logo {
-      display: flex; align-items: center; justify-content: center;
-    }
-    .mobile-menu__logo img { height: 26px; width: auto; }
-    .mobile-menu__body {
-      flex: 1; overflow-y: auto; padding: 0 24px 40px;
-    }
-    .mobile-menu__links { display: flex; flex-direction: column; }
-    .mobile-menu__links a {
-      font-size: 17px; font-weight: 600; color: var(--color-black);
-      padding: 18px 0; border-bottom: 1px solid var(--color-border);
-      display: flex; align-items: center; gap: 10px;
-    }
-    .mobile-menu__links a:hover { color: var(--color-muted); }
-    .mobile-menu__social { display: flex; flex-direction: column; }
-    .mobile-menu__social a {
-      font-size: 15px; font-weight: 500; color: var(--color-muted);
-      padding: 16px 0; border-bottom: 1px solid var(--color-border);
-      display: flex; align-items: center; gap: 10px;
-    }
-    .mobile-menu__cta { margin-top: 16px; }
-    .mobile-menu__cta .btn { width: 100%; font-size: 16px; padding: 17px 24px; }
-    @media (min-width: 768px) {
-      .mobile-menu__cta { max-width: 400px; margin: 16px auto 0; }
-    }
-
     /* ═══════════════════════════════════
        HERO
        Mobile: img top → dark content below
@@ -1159,9 +1105,9 @@
     <div class="container header__inner">
 
       <!-- Col 1: Hamburger (44px) -->
-      <button class="header__hamburger" id="menuToggle" aria-label="Open menu" aria-expanded="false">
-        <img src="assets/icons/feature_icons/icon-hamburger.svg" alt="">
-      </button>
+      <a href="index.html" class="header__left-icon" aria-label="Prisoncall Australia — home">
+        <img src="assets/brand_logos/Prisoncall_Icon_BLACK.svg" alt="Prisoncall Australia" class="header__icon-img">
+      </a>
 
       <!-- Col 2: Centre — wordmark (state 1) or mobile CTA (state 2) -->
       <div class="header__center">
@@ -1185,33 +1131,6 @@
     </div>
   </header>
 
-  <!-- ═══ MOBILE MENU ═══ -->
-  <div class="mobile-menu" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Navigation menu">
-    <div class="mobile-menu__top">
-      <button class="mobile-menu__close" id="menuClose" aria-label="Close menu">&#x2715;</button>
-      <div></div>
-    </div>
-    <div class="mobile-menu__body">
-      <nav class="mobile-menu__links">
-        <a href="choose-plan.html?state=vic">Choose Prisoncall plan</a>
-        <a href="/portal">My Prisoncall</a>
-        <a href="contact.html">Contact us</a>
-      </nav>
-      <div class="mobile-menu__social">
-        <a href="https://www.facebook.com/prisoncallaustralia" target="_blank" rel="noopener">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
-          Follow us on Facebook
-        </a>
-        <a href="https://www.instagram.com/prisoncallaustralia/" target="_blank" rel="noopener">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-          Follow us on Instagram
-        </a>
-      </div>
-      <div class="mobile-menu__cta">
-        <a href="choose-plan.html?state=vic&amp;prison=Port%20Phillip%20Prison" class="btn btn--green">Get your PPP number now</a>
-      </div>
-    </div>
-  </div>
 
   <main>
 
@@ -1896,29 +1815,6 @@
 
       obs.observe(heroCta);
     })();
-
-    // ─── Mobile Menu ───
-    var menuToggle = document.getElementById('menuToggle');
-    var menuClose  = document.getElementById('menuClose');
-    var mobileMenu = document.getElementById('mobileMenu');
-
-    function openMenu() {
-      mobileMenu.classList.add('is-open');
-      document.body.style.overflow = 'hidden';
-      menuToggle.setAttribute('aria-expanded', 'true');
-    }
-    function closeMenu() {
-      mobileMenu.classList.remove('is-open');
-      document.body.style.overflow = '';
-      menuToggle.setAttribute('aria-expanded', 'false');
-    }
-
-    menuToggle.addEventListener('click', openMenu);
-    menuClose.addEventListener('click', closeMenu);
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMenu(); });
-    mobileMenu.querySelectorAll('a').forEach(function(link) {
-      link.addEventListener('click', closeMenu);
-    });
 
     document.querySelectorAll('a.js-home-checker-focus').forEach(function(a) {
       a.addEventListener('click', function(e) {
