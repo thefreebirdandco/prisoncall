@@ -28,44 +28,72 @@
 
         <img src="/assets/brand_logos/Prisoncall_Black.svg" alt="Prisoncall" class="login-logo" width="140" height="20">
 
-        <h1 class="login-title">Welcome back</h1>
-        <p class="login-sub">Enter your mobile number to sign in to your account</p>
+        <!-- ── Step 1: Mobile entry ── -->
+        <div id="step1">
+          <h1 class="login-title">Welcome back</h1>
+          <p class="login-sub">Enter your mobile number to receive a sign-in code.</p>
 
-        <!-- Form -->
-        <form id="loginForm" novalidate>
-          <div class="login-field">
-            <label for="mobileInput" class="login-label">Mobile number</label>
-            <input
-              type="tel"
-              id="mobileInput"
-              class="login-input"
-              placeholder="0412 345 678"
-              autocomplete="tel"
-              inputmode="numeric"
-              maxlength="13"
-            >
-            <p class="login-input-hint">Australian mobile numbers only (04XX XXX XXX)</p>
-            <p class="login-error" id="mobileError">Please enter a valid Australian mobile number</p>
-          </div>
+          <form id="step1Form" novalidate>
+            <div class="login-field">
+              <label for="mobileInput" class="login-label">Mobile number</label>
+              <input
+                type="tel"
+                id="mobileInput"
+                class="login-input"
+                placeholder="0412 345 678"
+                autocomplete="tel"
+                inputmode="numeric"
+                maxlength="13"
+              >
+              <p class="login-input-hint">Australian mobile numbers only (04XX XXX XXX)</p>
+              <p class="login-error" id="mobileError">Please enter a valid Australian mobile number</p>
+            </div>
+            <div class="login-submit">
+              <button type="submit" class="btn btn--green btn--full" id="sendBtn">
+                Send code
+              </button>
+            </div>
+            <p class="login-error" id="step1Error" style="margin-top:14px; text-align:center;"></p>
+          </form>
 
-          <div class="login-submit">
-            <button type="submit" class="btn btn--green btn--full" id="submitBtn">
-              Send me a sign-in link
-            </button>
-          </div>
-        </form>
-
-        <!-- Success message (replaces form) -->
-        <div class="login-message" id="successMsg">
-          We have sent a sign-in link to your mobile. Check your SMS and tap the link to continue.
+          <p class="login-footer">
+            New to Prisoncall?&nbsp;<a href="/choose-plan.html">Get started</a>
+          </p>
         </div>
 
-        <!-- Inline error (API errors) -->
-        <p class="login-error" id="apiError" style="margin-top:14px; text-align:center;"></p>
+        <!-- ── Step 2: Code entry ── -->
+        <div id="step2" hidden>
+          <h1 class="login-title">Check your messages</h1>
+          <p class="login-sub" id="step2Hint">We sent a 6-digit code to your mobile.</p>
 
-        <p class="login-footer">
-          New to Prisoncall?&nbsp;<a href="/choose-plan.html">Get started</a>
-        </p>
+          <form id="step2Form" novalidate>
+            <div class="login-field">
+              <label for="codeInput" class="login-label">Verification code</label>
+              <input
+                type="tel"
+                id="codeInput"
+                class="login-input"
+                placeholder="000000"
+                maxlength="6"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+              >
+              <p class="login-error" id="codeError">Please enter the 6-digit code from your SMS</p>
+            </div>
+            <div class="login-submit">
+              <button type="submit" class="btn btn--green btn--full" id="verifyBtn">
+                Verify
+              </button>
+            </div>
+            <p class="login-error" id="step2Error" style="margin-top:14px; text-align:center;"></p>
+          </form>
+
+          <p class="login-footer" style="margin-top:16px;">
+            <button id="resendBtn" style="background:none;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;text-decoration:underline;padding:0;">Resend code</button>
+            &nbsp;&middot;&nbsp;
+            <button id="backBtn" style="background:none;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;text-decoration:underline;padding:0;">Wrong number?</button>
+          </p>
+        </div>
 
       </div>
     </div>
@@ -74,14 +102,28 @@
   <script>
     'use strict';
 
+    /* ── DOM refs ── */
+    var step1      = document.getElementById('step1');
+    var step2      = document.getElementById('step2');
+    var step1Form  = document.getElementById('step1Form');
+    var step2Form  = document.getElementById('step2Form');
     var mobileInput = document.getElementById('mobileInput');
     var mobileError = document.getElementById('mobileError');
-    var apiError    = document.getElementById('apiError');
-    var submitBtn   = document.getElementById('submitBtn');
-    var loginForm   = document.getElementById('loginForm');
-    var successMsg  = document.getElementById('successMsg');
+    var sendBtn    = document.getElementById('sendBtn');
+    var step1Error = document.getElementById('step1Error');
+    var codeInput  = document.getElementById('codeInput');
+    var codeError  = document.getElementById('codeError');
+    var verifyBtn  = document.getElementById('verifyBtn');
+    var step2Error = document.getElementById('step2Error');
+    var step2Hint  = document.getElementById('step2Hint');
+    var resendBtn  = document.getElementById('resendBtn');
+    var backBtn    = document.getElementById('backBtn');
 
-    /* ─── Auto-format mobile as 04XX XXX XXX ─── */
+    /* ── Session state ── */
+    var localMobile = ''; /* 04XXXXXXXXX — for /send-otp and /verify-otp  */
+    var e164Mobile  = ''; /* 61XXXXXXXXX — for /api/portal-login           */
+
+    /* ── Auto-format mobile as 04XX XXX XXX ── */
     mobileInput.addEventListener('input', function () {
       var raw = this.value.replace(/\D/g, '');
       /* Normalise E.164 autocomplete: +61XXXXXXXXX or 61XXXXXXXXX → 04XXXXXXXXX */
@@ -96,69 +138,219 @@
       this.value = fmt;
       mobileError.classList.remove('is-visible');
       this.classList.remove('is-error');
-      apiError.style.display = 'none';
+      step1Error.classList.remove('is-visible');
+      step1Error.textContent = '';
     });
 
-    /* ─── Validate mobile ─── */
-    function getMobileDigits() {
-      var d = mobileInput.value.replace(/\D/g, '');
-      /* 1. Normalise E.164 autocomplete: 61XXXXXXXXX → 04XXXXXXXXX */
+    /* ── Normalise mobile to local 04XXXXXXXXX ── */
+    function normaliseMobile(val) {
+      var d = val.replace(/\D/g, '');
       if (d.length === 11 && d.slice(0, 2) === '61') d = '0' + d.slice(2);
-      /* 2. Convert local 04XXXXXXXXX → E.164 61XXXXXXXXX (matches Supabase storage) */
-      if (d.length === 10 && d.charAt(0) === '0') d = '61' + d.slice(1);
       return d;
     }
 
-    function isValidMobile(digits) {
-      return /^61\d{9}$/.test(digits); /* E.164 no-plus, 11 digits */
+    function isValidMobile(d) {
+      return /^04\d{8}$/.test(d);
     }
 
-    /* ─── Form submit ─── */
-    loginForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var digits = getMobileDigits();
-      console.log('[login] submitting mobile (E.164):', digits);
+    /* ── Mask for display: 04XX ··· 789 ── */
+    function maskMobile(d) {
+      return d.slice(0, 4) + ' \u2022\u2022\u2022 ' + d.slice(7);
+    }
 
-      if (!isValidMobile(digits)) {
+    /* ── Shared OTP send helper ── */
+    function doSendOtp(onSuccess, onError) {
+      fetch('/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: localMobile }),
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.success === false) throw new Error(d.error || 'otp_failed');
+        onSuccess();
+      })
+      .catch(onError);
+    }
+
+    /* ════════════════════════════════════════════════════════
+       STEP 1 — Mobile entry → check subscription → send OTP
+    ════════════════════════════════════════════════════════ */
+    step1Form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var raw = normaliseMobile(mobileInput.value);
+      if (!isValidMobile(raw)) {
         mobileInput.classList.add('is-error');
         mobileError.classList.add('is-visible');
         mobileInput.focus();
         return;
       }
 
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Sending...';
-      apiError.style.display = 'none';
+      localMobile = raw;
+      e164Mobile  = '61' + raw.slice(1);
 
-      fetch('/api/send-magic-link', {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Checking\u2026';
+      step1Error.classList.remove('is-visible');
+      step1Error.textContent = '';
+
+      /* 1a. Confirm a subscription exists before dispatching any SMS */
+      fetch('/api/portal-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: digits }),
+        body: JSON.stringify({ mobile: e164Mobile, check_only: true }),
       })
-        .then(function (res) {
-          if (res.status === 404) {
-            throw { type: 'not_found' };
+      .then(function (r) {
+        if (r.status === 404) throw { type: 'not_found' };
+        if (!r.ok)           throw { type: 'error' };
+        return r.json();
+      })
+      .then(function () {
+        /* 1b. Account found — dispatch OTP */
+        sendBtn.textContent = 'Sending\u2026';
+        doSendOtp(
+          function () {
+            /* Success — reveal step 2 */
+            step2Hint.textContent =
+              'We sent a 6-digit code to ' + maskMobile(localMobile) + '.';
+            step1.hidden = true;
+            step2.hidden = false;
+            codeInput.value = '';
+            codeInput.focus();
+          },
+          function () {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send code';
+            step1Error.textContent = 'Failed to send code. Please try again.';
+            step1Error.classList.add('is-visible');
           }
-          if (!res.ok) {
-            throw { type: 'error' };
+        );
+      })
+      .catch(function (err) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send code';
+        if (err && err.type === 'not_found') {
+          step1Error.textContent =
+            'No Prisoncall account found for this number. ' +
+            'If you recently purchased, please wait a few minutes and try again.';
+        } else {
+          step1Error.textContent = 'Something went wrong. Please try again.';
+        }
+        step1Error.classList.add('is-visible');
+      });
+    });
+
+    /* ════════════════════════════════════════════════════
+       STEP 2 — Verify code → create session → redirect
+    ════════════════════════════════════════════════════ */
+    step2Form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var code = codeInput.value.replace(/\D/g, '');
+      if (code.length < 6) {
+        codeInput.classList.add('is-error');
+        codeError.textContent = 'Please enter the 6-digit code from your SMS';
+        codeError.classList.add('is-visible');
+        codeInput.focus();
+        return;
+      }
+
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = 'Verifying\u2026';
+      codeError.classList.remove('is-visible');
+      codeInput.classList.remove('is-error');
+      step2Error.classList.remove('is-visible');
+      step2Error.textContent = '';
+
+      /* 2a. Verify the OTP with Twilio */
+      fetch('/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: localMobile, code: code }),
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) {
+          var msg = d.error || 'Incorrect code. Please try again.';
+          if (msg.toLowerCase().indexOf('expired') !== -1) {
+            msg = 'Code expired. Use the \u201cResend code\u201d link to get a new one.';
           }
-          return res.json();
+          codeInput.classList.add('is-error');
+          codeError.textContent = msg;
+          codeError.classList.add('is-visible');
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = 'Verify';
+          return;
+        }
+
+        /* 2b. OTP correct — set session cookie server-side */
+        return fetch('/api/portal-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile: e164Mobile }),
+        })
+        .then(function (r) {
+          if (!r.ok) throw new Error('session_failed');
+          return r.json();
         })
         .then(function () {
-          loginForm.style.display = 'none';
-          successMsg.classList.add('is-visible');
-        })
-        .catch(function (err) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Send me a sign-in link';
-          apiError.style.display = 'block';
-          if (err && err.type === 'not_found') {
-            apiError.textContent =
-              'No account found for this number. If you recently purchased, please wait a few minutes and try again.';
-          } else {
-            apiError.textContent = 'Something went wrong. Please try again.';
-          }
+          /* Session cookie is now set — redirect to dashboard */
+          window.location.replace('/portal/dashboard.html');
         });
+      })
+      .catch(function () {
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = 'Verify';
+        step2Error.textContent = 'Something went wrong. Please try again.';
+        step2Error.classList.add('is-visible');
+      });
+    });
+
+    /* ── Resend code ── */
+    resendBtn.addEventListener('click', function () {
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending\u2026';
+      step2Error.classList.remove('is-visible');
+      step2Error.style.color = '';
+      doSendOtp(
+        function () {
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend code';
+          step2Error.style.color = '#1a5c33';
+          step2Error.textContent = 'New code sent.';
+          step2Error.classList.add('is-visible');
+          setTimeout(function () {
+            step2Error.classList.remove('is-visible');
+            step2Error.style.color = '';
+          }, 3000);
+        },
+        function () {
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend code';
+          step2Error.style.color = '';
+          step2Error.textContent = 'Failed to resend. Please try again.';
+          step2Error.classList.add('is-visible');
+        }
+      );
+    });
+
+    /* ── Back to step 1 (wrong number) ── */
+    backBtn.addEventListener('click', function () {
+      step2.hidden = true;
+      step1.hidden = false;
+      codeInput.value = '';
+      codeError.classList.remove('is-visible');
+      codeInput.classList.remove('is-error');
+      step2Error.classList.remove('is-visible');
+      step2Error.style.color = '';
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = 'Verify';
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send code';
+      step1Error.classList.remove('is-visible');
+      step1Error.textContent = '';
+      mobileInput.focus();
     });
 
     /* ═══════════════════════════════════

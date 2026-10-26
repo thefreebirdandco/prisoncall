@@ -3322,11 +3322,15 @@
       lineItems.push({ merchandiseId: 'gid://shopify/ProductVariant/' + LIFETIME_VARIANT, quantity: lifetimeQty });
     }
 
+    /* Bundle-eligible when: 2+ plans in this order (multi-plan), OR a returning
+       customer verified via OTP (Path C — bundleApplied flag set by wirePathCModal). */
+    var isBundleEligible = entries.length >= 2 || bundleApplied;
+
     var attributes = [
       { key: 'customer_mobile', value: entries.length > 0 ? entries[0].mobile : '' },
-      { key: 'bundle',          value: entries.length >= 2 ? 'true' : 'false' }
+      { key: 'bundle',          value: isBundleEligible ? 'true' : 'false' }
     ];
-    var discountCodes = entries.length >= 2 ? ['BUNDLE10'] : [];
+    var discountCodes = isBundleEligible ? ['BUNDLE10'] : [];
 
     fetch('/api/shopify-cart', {
       method: 'POST',

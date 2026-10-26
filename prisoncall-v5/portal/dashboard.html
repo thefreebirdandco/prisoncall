@@ -366,6 +366,14 @@
       return d.slice(0, 2) + ' ' + d.slice(2, 6) + ' ' + d.slice(6);
     }
 
+    /* ─── Format ISO 8601 timestamp as "26 Oct 2026" ─── */
+    function fmtStartDate(isoStr) {
+      if (!isoStr) return '-';
+      var d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
     /* ─── Authenticated header CTAs — green "Add a plan" pill ─── */
     function updateAuthHeader() {
       var mobileCta  = document.querySelector('.header__mobile-cta');
@@ -530,11 +538,6 @@
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (!data.ok) return;
-            var dateEl = document.getElementById('next-billing-' + sub.id);
-            if (dateEl && data.next_billing_date) {
-              var d = new Date(data.next_billing_date);
-              dateEl.textContent = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-            }
             var intervalEl = document.getElementById('billing-interval-' + sub.id);
             if (intervalEl && data.delivery_interval) {
               intervalEl.textContent = data.delivery_interval;
@@ -642,9 +645,7 @@
       var hasActions = (sub.status === 'ACTIVE' || sub.status === 'PAUSED' ||
                         sub.status === 'PENDING' || sub.status === 'DID_ORDERED' ||
                         sub.status === 'ACTIVATING');
-      var nextBill = (sub.status !== 'CANCELLED')
-        ? '<div class="pc-row"><span class="pc-key">Next billing</span><span class="pc-val" id="next-billing-' + sub.id + '">' + PortalAuth.esc(PortalAuth.formatDate(sub.next_billing_date)) + '</span></div>'
-        : '';
+      var startDate = '<div class="pc-row"><span class="pc-key">Plan start date</span><span class="pc-val">' + PortalAuth.esc(fmtStartDate(sub.created_at)) + '</span></div>';
       return [
         '<div class="pc-card" data-sub-id="' + sub.id + '" data-status="' + PortalAuth.esc(sub.status) + '" data-did="' + PortalAuth.esc(sub.current_did || '') + '">',
 
@@ -671,7 +672,7 @@
               '<span class="pc-key">Assigned mobile</span>',
               '<span class="pc-val">' + (sub.assigned_mobile ? fmtMobile(sub.assigned_mobile) : '<span style="color:var(--color-muted)">Not set</span>') + '</span>',
             '</div>',
-            nextBill,
+            startDate,
             addonBadges(sub),
           '</div>',
 
@@ -821,7 +822,6 @@
 
       cancelSubId = subId;
       var did = fmtDid(sub.current_did);
-      var nextBill = PortalAuth.formatDate(sub.next_billing_date);
 
       document.getElementById('cancelBody').textContent =
         'Once cancelled, your Prisoncall number ' + did +
