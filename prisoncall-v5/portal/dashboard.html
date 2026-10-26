@@ -166,11 +166,6 @@
   <header class="header header--scrolled" id="siteHeader">
     <div class="container header__inner">
 
-      <!-- Col 1: Hamburger (44px) -->
-      <button class="header__hamburger" id="menuToggle" aria-label="Open menu" aria-expanded="false">
-        <img src="/assets/icons/feature_icons/icon-hamburger.svg" alt="">
-      </button>
-
       <!-- Col 2: Centre — wordmark (state 1) or mobile CTA (state 2) -->
       <div class="header__center">
         <a href="/" class="header__wordmark" aria-label="Prisoncall Australia — home">
@@ -1012,29 +1007,6 @@
     /* ─── Sign out ─── */
     function doSignOut() { PortalAuth.logout(); }
     document.getElementById('signOutBtn').addEventListener('click', doSignOut);
-
-    /* ─── Mobile menu (exact from index.html) ─── */
-    var menuToggle = document.getElementById('menuToggle');
-    var menuClose  = document.getElementById('menuClose');
-    var mobileMenu = document.getElementById('mobileMenu');
-
-    function openMenu() {
-      mobileMenu.classList.add('is-open');
-      document.body.style.overflow = 'hidden';
-      menuToggle.setAttribute('aria-expanded', 'true');
-    }
-    function closeMenu() {
-      mobileMenu.classList.remove('is-open');
-      document.body.style.overflow = '';
-      menuToggle.setAttribute('aria-expanded', 'false');
-    }
-
-    menuToggle.addEventListener('click', openMenu);
-    menuClose.addEventListener('click', closeMenu);
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMenu(); });
-    mobileMenu.querySelectorAll('a').forEach(function(link) {
-      link.addEventListener('click', closeMenu);
-    });
 
     /* ─── Header scroll state (exact from index.html) ─── */
     (function() {
