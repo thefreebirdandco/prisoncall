@@ -115,7 +115,7 @@ export async function onRequestPost(context) {
     const twilioSid  = env.TWILIO_ACCOUNT_SID;
     const twilioAuth = env.TWILIO_AUTH_TOKEN;
     const twilioFrom = env.TWILIO_SMS_NUMBER;
-    const smsBody    = `TRANSFER REQUEST - Seal ID: ${sealSubId}. ${customerName}. Prison: ${newPrison} (${newPrisonState}). Log in to admin portal to action.`;
+    const smsBody    = `TRANSFER REQUEST - Seal ID: ${sealSubId}. ${customerName}. Prison: ${newPrison} (${newPrisonState.toUpperCase()}). Log in to admin portal to action.`;
     context.waitUntil(
       Promise.all(['+61413598815', '+61422749601'].map(to =>
         fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
