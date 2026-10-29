@@ -221,10 +221,23 @@
       background: #ffffff;
       padding: 24px;
     }
+    #transferStatusConfirmBtns {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    #transferStatusConfirmBtns .btn {
+      flex: 1;
+      white-space: normal;
+      text-align: center;
+      padding: 14px 10px;
+      font-size: 14px;
+    }
     @media (max-width: 480px) {
       #transferStatusModal .ap-modal-head,
       #transferStatusModal .ap-modal-body { padding: 20px; }
       #transferStatusModal .ap-modal-head h2 { font-size: 1.05rem; }
+      #transferStatusConfirmBtns { flex-direction: column; }
     }
   </style>
 </head>
@@ -385,8 +398,17 @@
         <button id="closeTransferStatusModalBtn" aria-label="Close">&#x2715;</button>
       </div>
       <div class="ap-modal-body">
-        <p id="transferStatusMsg" style="font-size:15px;color:#101010;line-height:1.6;margin:0;"></p>
-        <button id="cancelTransferRequestBtn" class="btn btn--danger btn--full" style="margin-top:20px;" hidden>Cancel Transfer Request</button>
+        <div id="transferStatusView">
+          <p id="transferStatusMsg" style="font-size:15px;color:#101010;line-height:1.6;margin:0;"></p>
+          <button id="cancelTransferRequestBtn" class="btn btn--danger btn--full" style="margin-top:20px;" hidden>Cancel Transfer Request</button>
+        </div>
+        <div id="transferStatusConfirmView" hidden>
+          <p id="transferStatusConfirmMsg" style="font-size:15px;color:#101010;line-height:1.6;margin:0;"></p>
+          <div id="transferStatusConfirmBtns">
+            <button id="confirmCancelTransferBtn" class="btn btn--danger">Yes, Cancel Request</button>
+            <button id="keepTransferRequestBtn" class="btn btn--outline">Keep Request</button>
+          </div>
+        </div>
         <p id="transferStatusError" style="margin-top:8px;font-size:13px;color:#c0392b;min-height:18px;text-align:center;"></p>
       </div>
     </div>
@@ -1111,12 +1133,25 @@
        TRANSFER STATUS MODAL
     ════════════════════════════════════════ */
 
+    function showTransferStatusView() {
+      document.getElementById('transferStatusView').hidden = false;
+      document.getElementById('transferStatusConfirmView').hidden = true;
+    }
+
+    function showTransferConfirmView() {
+      document.getElementById('transferStatusView').hidden = true;
+      document.getElementById('transferStatusConfirmView').hidden = false;
+    }
+
     function openTransferStatusModal() {
       if (!pendingTransfer) return;
       var msg       = document.getElementById('transferStatusMsg');
       var cancelBtn = document.getElementById('cancelTransferRequestBtn');
       var errEl     = document.getElementById('transferStatusError');
+      var yesBtn    = document.getElementById('confirmCancelTransferBtn');
       if (errEl) errEl.textContent = '';
+      if (yesBtn) { yesBtn.disabled = false; yesBtn.textContent = 'Yes, Cancel Request'; }
+      showTransferStatusView();
 
       if (pendingTransfer.status === 'PENDING_VOIPLINE') {
         var prison = pendingTransfer.new_prison_name || 'your new prison';
@@ -1139,7 +1174,20 @@
 
     document.getElementById('cancelTransferRequestBtn').addEventListener('click', function () {
       if (!pendingTransfer) return;
-      if (!confirm('Are you sure you want to cancel your transfer request?')) return;
+      var prison = pendingTransfer.new_prison_name || 'your new prison';
+      document.getElementById('transferStatusConfirmMsg').textContent =
+        'Are you sure you want to cancel your transfer request to ' + prison + '? Our team will be notified.';
+      document.getElementById('transferStatusError').textContent = '';
+      showTransferConfirmView();
+    });
+
+    document.getElementById('keepTransferRequestBtn').addEventListener('click', function () {
+      document.getElementById('transferStatusError').textContent = '';
+      showTransferStatusView();
+    });
+
+    document.getElementById('confirmCancelTransferBtn').addEventListener('click', function () {
+      if (!pendingTransfer) return;
 
       var btn   = this;
       var errEl = document.getElementById('transferStatusError');
@@ -1157,12 +1205,14 @@
           if (!data.ok) throw new Error(data.error || 'error');
           pendingTransfer.status = 'CANCELLATION_REQUESTED';
           var msg = document.getElementById('transferStatusMsg');
+          var cancelBtn = document.getElementById('cancelTransferRequestBtn');
           if (msg) msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
-          btn.hidden = true;
+          if (cancelBtn) cancelBtn.hidden = true;
+          showTransferStatusView();
         })
         .catch(function () {
           btn.disabled = false;
-          btn.textContent = 'Cancel Transfer Request';
+          btn.textContent = 'Yes, Cancel Request';
           if (errEl) errEl.textContent = 'Something went wrong. Please try again.';
         });
     });
