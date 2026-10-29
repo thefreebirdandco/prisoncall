@@ -89,10 +89,14 @@ export async function onRequestGet(context) {
   if (action === 'get-pending-transfer') {
     const session = getSession(request);
     if (!session) return json({ error: 'unauthenticated' }, 401);
-    const mobile = session.mobile;
+
+    // session.mobile is E.164 no-plus (61xxxxxxxxx); transfers.assigned_mobile
+    // is local 10-digit (0xxxxxxxxx) — normalise before querying.
+    const rawMobile   = session.mobile || '';
+    const localMobile = rawMobile.startsWith('61') ? '0' + rawMobile.slice(2) : rawMobile;
 
     const res = await sb(
-      `transfers?assigned_mobile=eq.${encodeURIComponent(mobile)}&status=in.(PENDING_VOIPLINE,CANCELLATION_REQUESTED)&order=created_at.desc&limit=1`
+      `transfers?assigned_mobile=eq.${encodeURIComponent(localMobile)}&status=in.(PENDING_VOIPLINE,CANCELLATION_REQUESTED)&order=created_at.desc&limit=1`
     );
     if (!res.ok) return json(null);
     const rows = await res.json();
