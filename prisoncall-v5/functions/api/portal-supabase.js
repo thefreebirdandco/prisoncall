@@ -315,7 +315,11 @@ export async function onRequestPost(context) {
   if (action === 'cancel-transfer-request') {
     const session = getSession(request);
     if (!session) return json({ error: 'unauthenticated' }, 401);
-    const mobile = session.mobile;
+
+    // session.mobile is E.164 no-plus (61xxxxxxxxx); transfers.assigned_mobile
+    // is local 10-digit (0xxxxxxxxx) — normalise before comparing.
+    const rawMobile   = session.mobile || '';
+    const localMobile = rawMobile.startsWith('61') ? '0' + rawMobile.slice(2) : rawMobile;
 
     const { transfer_id } = body;
     if (!transfer_id) return json({ error: 'missing_fields' }, 400);
@@ -326,7 +330,7 @@ export async function onRequestPost(context) {
     const trRows = await trRes.json();
     if (!trRows.length) return json({ error: 'not_found' }, 404);
     const transfer = trRows[0];
-    if (transfer.assigned_mobile !== mobile) return json({ error: 'forbidden' }, 403);
+    if (transfer.assigned_mobile !== localMobile) return json({ error: 'forbidden' }, 403);
     if (transfer.status !== 'PENDING_VOIPLINE') return json({ error: 'invalid_status' }, 400);
 
     // PATCH transfer to CANCELLATION_REQUESTED
