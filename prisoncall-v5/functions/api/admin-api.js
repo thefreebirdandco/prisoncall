@@ -156,7 +156,6 @@ export async function onRequest({ request, env }) {
           const prevRes = await sb(`subscriptions?id=eq.${id}&select=status,assigned_mobile,customer_name&limit=1`);
           const prevRows = await prevRes.json();
           prevSub = Array.isArray(prevRows) ? prevRows[0] : null;
-          if (prevSub?.status === 'PAUSED') patch.sms_day_count = 0;
         }
 
         const r = await sb(`subscriptions?id=eq.${id}`, {
