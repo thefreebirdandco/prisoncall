@@ -308,6 +308,7 @@ export async function onRequest({ request, env }) {
 
       case 'complete-transfer': {
         await requireAuth();
+        console.log('[complete-transfer] params received:', JSON.stringify(params));
         const { id, new_did } = params;
         if (!id)      return json({ error: 'id required' },      400);
         if (!new_did) return json({ error: 'new_did required' }, 400);
@@ -343,6 +344,7 @@ export async function onRequest({ request, env }) {
             }),
           }
         );
+        console.log('[complete-transfer] subscriptions PATCH status:', subPatchRes.status, '— assigned_mobile:', transfer.assigned_mobile);
         if (!subPatchRes.ok) {
           const subErr = await subPatchRes.json().catch(() => ({}));
           return json({ error: subErr.message || 'Subscription update failed' }, 500);
