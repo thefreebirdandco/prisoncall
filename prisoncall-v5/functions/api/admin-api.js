@@ -314,7 +314,7 @@ export async function onRequest({ request, env }) {
         if (!new_did) return json({ error: 'new_did required' }, 400);
 
         /* ── 1. Mark transfer COMPLETED ───────────────────────────────── */
-        const r = await sb(`transfers?id=eq.${id}`, {
+        const r = await sb(`transfers?id=eq.${id}&select=*,subscriptions(seal_subscription_id)`, {
           method: 'PATCH',
           body: JSON.stringify({ status: 'COMPLETED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
         });
@@ -323,6 +323,9 @@ export async function onRequest({ request, env }) {
 
         const transfer = Array.isArray(data) ? data[0] : data;
         if (!transfer) return json({ error: 'Transfer row not returned — check transfers table id' }, 500);
+
+        const sealSubId = transfer.subscriptions?.seal_subscription_id;
+        if (!sealSubId) return json({ error: 'seal_subscription_id not found for this transfer' }, 500);
 
         /* ── 2. Format readable DID (E.164 no-plus → local 2+4+4) ──────── */
         const localDid    = '0' + new_did.substring(2);                              // e.g. "0272387360"
@@ -333,10 +336,12 @@ export async function onRequest({ request, env }) {
         /* submit-transfer.js stores state.confirmedMobile without E.164       */
         /* conversion. subscriptions.assigned_mobile is E.164 no-plus         */
         /* ("61413..."). Normalise before querying so the filter matches.      */
+        /* Dual filter (mobile + seal_subscription_id) so we update exactly    */
+        /* one row when multiple subscriptions share the same mobile.          */
         const rawMobile  = transfer.assigned_mobile || '';
         const subsMobile = rawMobile.startsWith('0') ? '61' + rawMobile.slice(1) : rawMobile;
         const subPatchRes = await sb(
-          `subscriptions?assigned_mobile=eq.${encodeURIComponent(subsMobile)}`,
+          `subscriptions?assigned_mobile=eq.${encodeURIComponent(subsMobile)}&seal_subscription_id=eq.${encodeURIComponent(sealSubId)}`,
           {
             method: 'PATCH',
             headers: { Prefer: 'return=minimal' },
@@ -348,7 +353,7 @@ export async function onRequest({ request, env }) {
             }),
           }
         );
-        console.log('[complete-transfer] subscriptions PATCH status:', subPatchRes.status, '— queried subsMobile:', subsMobile, '(raw from transfers:', rawMobile, ')');
+        console.log('[complete-transfer] subscriptions PATCH status:', subPatchRes.status, '— queried subsMobile:', subsMobile, 'sealSubId:', sealSubId, '(raw from transfers:', rawMobile, ')');
         if (!subPatchRes.ok) {
           const subErr = await subPatchRes.json().catch(() => ({}));
           return json({ error: subErr.message || 'Subscription update failed' }, 500);
