@@ -158,6 +158,27 @@
       max-height: 90vh;
       overflow-y: auto;
     }
+
+    /* ─── Transfer status modal overlay ─── */
+    #transferStatusModal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #transferStatusModal[hidden] { display: none !important; }
+    #transferStatusModal .ap-modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      border: 2px solid #101010;
+      max-width: 440px;
+      width: calc(100% - 32px);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -309,6 +330,21 @@
     </div>
   </div>
 
+  <!-- ═══ TRANSFER STATUS MODAL (global) ═══ -->
+  <div id="transferStatusModal" hidden aria-modal="true" role="dialog">
+    <div class="ap-modal-card">
+      <div class="ap-modal-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Transfer Request</h2>
+        <button id="closeTransferStatusModalBtn" style="background:none;border:none;color:#ffffff;font-size:1.5rem;cursor:pointer;line-height:1;padding:0;">&#x2715;</button>
+      </div>
+      <div class="ap-modal-body">
+        <p id="transferStatusMsg" style="font-size:15px;color:#101010;line-height:1.6;margin-bottom:0;"></p>
+        <button id="cancelTransferRequestBtn" class="btn btn--danger btn--full" style="margin-top:20px;" hidden>Cancel Transfer Request</button>
+        <p id="transferStatusError" style="margin-top:8px;font-size:13px;color:#c0392b;min-height:18px;text-align:center;"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ MAIN ═══ -->
   <main>
 
@@ -349,6 +385,7 @@
     var cancelSubId = null;
     var activeAddProtectionSubId = null;
     var activeTransferSubId = null;
+    var pendingTransfer = null;
 
     /* ─── Format mobile as 04XX XXX XXX — handles E.164 no-plus (61xxxxxxxxxx) too ─── */
     function fmtMobile(raw) {
@@ -489,15 +526,21 @@
         });
     }
 
-    /* ─── Load subscriptions ─── */
+    /* ─── Load subscriptions + pending transfer ─── */
     function loadSubscriptions() {
-      fetch('/api/portal-supabase?action=get-subscriptions')
-        .then(function (r) {
+      Promise.all([
+        fetch('/api/portal-supabase?action=get-subscriptions').then(function (r) {
           if (!r.ok) throw new Error('fetch error');
           return r.json();
-        })
-        .then(function (data) {
-          subs = Array.isArray(data) ? data : [];
+        }),
+        fetch('/api/portal-supabase?action=get-pending-transfer').then(function (r) {
+          return r.json();
+        }).catch(function () { return null; }),
+      ])
+        .then(function (results) {
+          subs = Array.isArray(results[0]) ? results[0] : [];
+          var tr = results[1];
+          pendingTransfer = (tr && tr.id) ? tr : null;
           renderDash();
         })
         .catch(function () {
@@ -608,7 +651,9 @@
         var stateParam = encodeURIComponent(sub.prison_state || '');
         var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
         var parts = [];
-        if (sub.has_lifetime_protection) {
+        if (pendingTransfer) {
+          parts.push('<button class="btn btn--outline btn--full tp-status-btn" data-sub-id="' + id + '">Transfer Pending</button>');
+        } else if (sub.has_lifetime_protection) {
           parts.push('<a href="/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=1" class="btn btn--outline btn--full">Transfer Prison</a>');
         } else {
           parts.push('<button class="btn btn--outline btn--full tp-transfer-btn" data-sub-id="' + id + '">Transfer Prison</button>');
@@ -695,7 +740,13 @@
           openAddProtectionModal();
         });
       });
-      /* Transfer Prison (unprotected customers — shows modal) */
+      /* Transfer Pending — shows status modal */
+      document.querySelectorAll('.tp-status-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openTransferStatusModal();
+        });
+      });
+      /* Transfer Prison (unprotected customers — shows upsell modal) */
       document.querySelectorAll('.tp-transfer-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           openTransferModal(this.dataset.subId);
@@ -1007,6 +1058,66 @@
       var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
       var redirectAfter = window.location.origin + '/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=0';
       doTransferCartCheckout('67658171515159', redirectAfter);
+    });
+
+    /* ════════════════════════════════════════
+       TRANSFER STATUS MODAL
+    ════════════════════════════════════════ */
+
+    function openTransferStatusModal() {
+      if (!pendingTransfer) return;
+      var msg       = document.getElementById('transferStatusMsg');
+      var cancelBtn = document.getElementById('cancelTransferRequestBtn');
+      var errEl     = document.getElementById('transferStatusError');
+      if (errEl) errEl.textContent = '';
+
+      if (pendingTransfer.status === 'PENDING_VOIPLINE') {
+        var prison = pendingTransfer.new_prison_name || 'your new prison';
+        var st     = (pendingTransfer.new_prison_state || '').toUpperCase();
+        msg.textContent = 'Your transfer request is in progress. Our team is processing your move to ' +
+          prison + (st ? ', ' + st : '') +
+          '. We\u2019ll notify you when your new number is ready.';
+        if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Transfer Request'; }
+      } else {
+        msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
+        if (cancelBtn) cancelBtn.hidden = true;
+      }
+
+      document.getElementById('transferStatusModal').hidden = false;
+    }
+
+    document.getElementById('closeTransferStatusModalBtn').addEventListener('click', function () {
+      document.getElementById('transferStatusModal').hidden = true;
+    });
+
+    document.getElementById('cancelTransferRequestBtn').addEventListener('click', function () {
+      if (!pendingTransfer) return;
+      if (!confirm('Are you sure you want to cancel your transfer request?')) return;
+
+      var btn   = this;
+      var errEl = document.getElementById('transferStatusError');
+      btn.disabled = true;
+      btn.textContent = 'Cancelling\u2026';
+      if (errEl) errEl.textContent = '';
+
+      fetch('/api/portal-supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel-transfer-request', transfer_id: pendingTransfer.id }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || 'error');
+          pendingTransfer.status = 'CANCELLATION_REQUESTED';
+          var msg = document.getElementById('transferStatusMsg');
+          if (msg) msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
+          btn.hidden = true;
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Cancel Transfer Request';
+          if (errEl) errEl.textContent = 'Something went wrong. Please try again.';
+        });
     });
 
     /* ─── Sign out ─── */

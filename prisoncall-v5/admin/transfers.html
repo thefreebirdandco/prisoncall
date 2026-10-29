@@ -63,12 +63,13 @@
             <th>Assigned Mobile</th>
             <th>Requested Prison</th>
             <th>State</th>
+            <th>Status</th>
             <th>Submitted At</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="transfersBody">
-          <tr class="loading-row"><td colspan="6"><span class="spinner"></span>Loading transfers&hellip;</td></tr>
+          <tr class="loading-row"><td colspan="7"><span class="spinner"></span>Loading transfers&hellip;</td></tr>
         </tbody>
       </table>
     </div>
@@ -85,7 +86,7 @@ let pending = [];
 async function loadTransfers() {
   try {
     const data = await api('get-transfers');
-    pending = (Array.isArray(data) ? data : []).filter(t => t.status === 'PENDING_VOIPLINE');
+    pending = (Array.isArray(data) ? data : []).filter(t => t.status === 'PENDING_VOIPLINE' || t.status === 'CANCELLATION_REQUESTED');
     renderTable();
   } catch (err) {
     document.getElementById('transfersBody').innerHTML =
@@ -99,30 +100,41 @@ function renderTable() {
 
   const tbody = document.getElementById('transfersBody');
   if (!pending.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">No pending transfers.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No pending transfers.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = pending.map(t => {
-    const name   = esc(t.subscriptions?.customer_name || t.assigned_mobile || '\u2014');
-    const mobile = esc(formatMobile(t.assigned_mobile));
-    const prison = esc(t.new_prison_name  || '\u2014');
-    const state  = esc(t.new_prison_state || '\u2014');
-    const date   = esc(fmtDateTime(t.created_at));
-    return `<tr>
+    const name         = esc(t.subscriptions?.customer_name || t.assigned_mobile || '\u2014');
+    const mobile       = esc(formatMobile(t.assigned_mobile));
+    const prison       = esc(t.new_prison_name  || '\u2014');
+    const state        = esc(t.new_prison_state || '\u2014');
+    const date         = esc(fmtDateTime(t.created_at));
+    const isCancReq    = t.status === 'CANCELLATION_REQUESTED';
+    const rowStyle     = isCancReq ? ' style="background:#fef3c7"' : '';
+    const statusBadge  = isCancReq
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#f59e0b;color:#101010;">Cancellation Requested</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#bfdbfe;color:#1e40af;">Transfer Pending</span>`;
+    const lastCell     = isCancReq
+      ? `<td style="white-space:nowrap;text-align:right;padding-right:12px">
+          <button class="btn btn--danger btn--sm btn-cancel" data-id="${esc(t.id)}">Mark Cancelled</button>
+        </td>`
+      : `<td style="text-align:right;padding-right:12px;min-width:220px">
+          <div style="margin-bottom:8px">
+            <input type="text" class="did-input" data-id="${esc(t.id)}" placeholder="New DID (eg 61272387360)" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;box-sizing:border-box">
+            <div class="did-preview" data-id="${esc(t.id)}" style="font-size:11px;color:#6b7280;margin-top:3px;min-height:14px"></div>
+          </div>
+          <button class="btn btn--primary btn--sm btn-complete" data-id="${esc(t.id)}" style="margin-right:6px">Mark Completed</button>
+          <button class="btn btn--danger btn--sm btn-cancel" data-id="${esc(t.id)}">Mark Cancelled</button>
+        </td>`;
+    return `<tr${rowStyle}>
       <td class="td-name">${name}</td>
       <td style="white-space:nowrap">${mobile}</td>
       <td>${prison}</td>
       <td>${state}</td>
+      <td>${statusBadge}</td>
       <td class="td-muted">${date}</td>
-      <td style="text-align:right;padding-right:12px;min-width:220px">
-        <div style="margin-bottom:8px">
-          <input type="text" class="did-input" data-id="${esc(t.id)}" placeholder="New DID (eg 61272387360)" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;box-sizing:border-box">
-          <div class="did-preview" data-id="${esc(t.id)}" style="font-size:11px;color:#6b7280;margin-top:3px;min-height:14px"></div>
-        </div>
-        <button class="btn btn--primary btn--sm btn-complete" data-id="${esc(t.id)}" style="margin-right:6px">Mark Completed</button>
-        <button class="btn btn--danger btn--sm btn-cancel" data-id="${esc(t.id)}">Mark Cancelled</button>
-      </td>
+      ${lastCell}
     </tr>`;
   }).join('');
 

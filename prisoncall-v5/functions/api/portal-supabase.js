@@ -85,6 +85,20 @@ export async function onRequestGet(context) {
     return json(rows);
   }
 
+  // ── get-pending-transfer ─────────────────────────────────────────────────
+  if (action === 'get-pending-transfer') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+    const mobile = session.mobile;
+
+    const res = await sb(
+      `transfers?assigned_mobile=eq.${encodeURIComponent(mobile)}&status=in.(PENDING_VOIPLINE,CANCELLATION_REQUESTED)&order=created_at.desc&limit=1`
+    );
+    if (!res.ok) return json(null);
+    const rows = await res.json();
+    return json(Array.isArray(rows) && rows[0] ? rows[0] : null);
+  }
+
   return json({ error: 'unknown_action' }, 400);
 }
 
@@ -289,6 +303,57 @@ export async function onRequestPost(context) {
       console.error('Seal process-charge error', sealRes.status, errText);
       return json({ ok: false, error: `Payment processor error (${sealRes.status})` }, 502);
     }
+
+    return json({ ok: true });
+  }
+
+  // ── cancel-transfer-request ──────────────────────────────────────────────
+  if (action === 'cancel-transfer-request') {
+    const session = getSession(request);
+    if (!session) return json({ error: 'unauthenticated' }, 401);
+    const mobile = session.mobile;
+
+    const { transfer_id } = body;
+    if (!transfer_id) return json({ error: 'missing_fields' }, 400);
+
+    // Fetch transfer and verify it belongs to this customer
+    const trRes = await sb(`transfers?id=eq.${encodeURIComponent(transfer_id)}&limit=1`);
+    if (!trRes.ok) return json({ error: 'db_error' }, 500);
+    const trRows = await trRes.json();
+    if (!trRows.length) return json({ error: 'not_found' }, 404);
+    const transfer = trRows[0];
+    if (transfer.assigned_mobile !== mobile) return json({ error: 'forbidden' }, 403);
+    if (transfer.status !== 'PENDING_VOIPLINE') return json({ error: 'invalid_status' }, 400);
+
+    // PATCH transfer to CANCELLATION_REQUESTED
+    await sb(`transfers?id=eq.${encodeURIComponent(transfer_id)}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ status: 'CANCELLATION_REQUESTED', updated_at: new Date().toISOString() }),
+    });
+
+    // Look up customer name for SMS
+    const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&select=customer_name&limit=1`);
+    const subRows = await subRes.json();
+    const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || mobile;
+
+    // Admin SMS
+    const twilioSid  = env.TWILIO_ACCOUNT_SID;
+    const twilioAuth = env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = env.TWILIO_SMS_NUMBER;
+    const prisonInfo = (transfer.new_prison_name || '') + (transfer.new_prison_state ? ' (' + transfer.new_prison_state + ')' : '');
+    const smsBody = `TRANSFER CANCELLATION REQUESTED - ${customerName} has requested to cancel their transfer to ${prisonInfo}. Log in to admin portal to action.`;
+
+    await Promise.all(['+61413598815', '+61422749601'].map(to =>
+      fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ From: twilioFrom, To: to, Body: smsBody }),
+      })
+    ));
 
     return json({ ok: true });
   }
