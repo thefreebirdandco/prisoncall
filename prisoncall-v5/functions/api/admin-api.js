@@ -329,10 +329,14 @@ export async function onRequest({ request, env }) {
         const readableDid = localDid.substring(0, 2) + ' ' + localDid.substring(2, 6) + ' ' + localDid.substring(6); // "02 7238 7360"
 
         /* ── 3. Update subscription: new DID + new prison ──────────────── */
-        /* Use Prefer:return=minimal so we read the error body properly;     */
-        /* sb() defaults to return=representation which can mask PATCH errors */
+        /* transfers.assigned_mobile is local 10-digit ("0413...") because    */
+        /* submit-transfer.js stores state.confirmedMobile without E.164       */
+        /* conversion. subscriptions.assigned_mobile is E.164 no-plus         */
+        /* ("61413..."). Normalise before querying so the filter matches.      */
+        const rawMobile  = transfer.assigned_mobile || '';
+        const subsMobile = rawMobile.startsWith('0') ? '61' + rawMobile.slice(1) : rawMobile;
         const subPatchRes = await sb(
-          `subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}`,
+          `subscriptions?assigned_mobile=eq.${encodeURIComponent(subsMobile)}`,
           {
             method: 'PATCH',
             headers: { Prefer: 'return=minimal' },
@@ -344,7 +348,7 @@ export async function onRequest({ request, env }) {
             }),
           }
         );
-        console.log('[complete-transfer] subscriptions PATCH status:', subPatchRes.status, '— assigned_mobile:', transfer.assigned_mobile);
+        console.log('[complete-transfer] subscriptions PATCH status:', subPatchRes.status, '— queried subsMobile:', subsMobile, '(raw from transfers:', rawMobile, ')');
         if (!subPatchRes.ok) {
           const subErr = await subPatchRes.json().catch(() => ({}));
           return json({ error: subErr.message || 'Subscription update failed' }, 500);
