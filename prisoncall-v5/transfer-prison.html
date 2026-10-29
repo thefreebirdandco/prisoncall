@@ -1112,7 +1112,8 @@
   }
 
   function buildStep4El(){
-    var sv  = state.transferState || state.currentState || state.didState || 'vic';
+    var sv = (state.transferState || state.currentState || state.didState || 'vic').toLowerCase();
+    if (sv !== 'vic' && sv !== 'nsw') sv = 'vic';
     var el  = document.createElement('section');
     el.className = 'step-section'; el.dataset.step = '4';
     el.innerHTML = [
