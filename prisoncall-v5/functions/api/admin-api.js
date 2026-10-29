@@ -308,9 +308,11 @@ export async function onRequest({ request, env }) {
 
       case 'complete-transfer': {
         await requireAuth();
-        const { id } = params;
-        if (!id) return json({ error: 'id required' }, 400);
+        const { id, new_did } = params;
+        if (!id)      return json({ error: 'id required' },      400);
+        if (!new_did) return json({ error: 'new_did required' }, 400);
 
+        /* ── 1. Mark transfer COMPLETED ───────────────────────────────── */
         const r = await sb(`transfers?id=eq.${id}`, {
           method: 'PATCH',
           body: JSON.stringify({ status: 'COMPLETED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
@@ -320,17 +322,45 @@ export async function onRequest({ request, env }) {
 
         const transfer = Array.isArray(data) ? data[0] : data;
 
+        /* ── 2. Format readable DID (E.164 no-plus → local 2+4+4) ──────── */
+        const localDid    = '0' + new_did.substring(2);                             // e.g. "0272387360"
+        const readableDid = localDid.substring(0, 2) + ' ' + localDid.substring(2, 6) + ' ' + localDid.substring(6); // "02 7238 7360"
+
+        /* ── 3. Update subscription: new DID + new prison ─────────────── */
+        await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            current_did:  new_did,
+            prison_name:  transfer.new_prison_name,
+            prison_state: transfer.new_prison_state,
+          }),
+        });
+
+        /* ── 4. Look up customer name ─────────────────────────────────── */
         const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}&select=customer_name&limit=1`);
         const subRows = await subRes.json();
         const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
 
-        const assignedMobileDisplay = '0' + transfer.assigned_mobile.substring(2);
-        const smsBody = `TRANSFER COMPLETED - ${customerName} moved to ${transfer.new_prison_name} (${transfer.new_prison_state}). Assigned mobile: ${assignedMobileDisplay}.`;
-
-        const twilioSid = env.TWILIO_ACCOUNT_SID;
+        /* ── 5. Twilio credentials ────────────────────────────────────── */
+        const twilioSid  = env.TWILIO_ACCOUNT_SID;
         const twilioAuth = env.TWILIO_AUTH_TOKEN;
         const twilioFrom = env.TWILIO_SMS_NUMBER;
 
+        /* ── 6. Customer SMS ──────────────────────────────────────────── */
+        const customerMobile  = '+' + transfer.assigned_mobile;
+        const customerSmsBody = `Your Prisoncall number has been updated. Your new number is ${readableDid}. Please update your contacts.`;
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ From: twilioFrom, To: customerMobile, Body: customerSmsBody }),
+        });
+
+        /* ── 7. Admin SMS (includes new DID) ─────────────────────────── */
+        const assignedMobileDisplay = '0' + transfer.assigned_mobile.substring(2);
+        const smsBody = `TRANSFER COMPLETED - ${customerName} moved to ${transfer.new_prison_name} (${transfer.new_prison_state}). Assigned mobile: ${assignedMobileDisplay}. New DID: ${readableDid}.`;
         await Promise.all(['+61413598815', '+61422749601'].map(to =>
           fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
             method: 'POST',
