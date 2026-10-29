@@ -21,9 +21,10 @@ export async function onRequestPost(context) {
     return jsonResponse({ success: false });
   }
 
-  const rawDid = (body.did    || '').replace(/\D/g, '');
-  const did    = rawDid.startsWith('0') ? '61' + rawDid.slice(1) : rawDid;
-  const mobile = (body.mobile || '').replace(/\D/g, '');
+  const rawDid    = (body.did    || '').replace(/\D/g, '');
+  const did       = rawDid.startsWith('0') ? '61' + rawDid.slice(1) : rawDid;
+  const rawMobile = (body.mobile || '').replace(/\D/g, '');
+  const mobile    = rawMobile.startsWith('0') ? '61' + rawMobile.slice(1) : rawMobile;
 
   if (!did || !mobile) {
     return jsonResponse({ success: false });
