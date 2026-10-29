@@ -340,10 +340,10 @@ export async function onRequestPost(context) {
       body: JSON.stringify({ status: 'CANCELLATION_REQUESTED', updated_at: new Date().toISOString() }),
     });
 
-    // Look up customer name for SMS
-    const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(mobile)}&select=customer_name&limit=1`);
+    // Look up customer name for SMS (subscriptions.assigned_mobile is E.164)
+    const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(rawMobile)}&select=customer_name&limit=1`);
     const subRows = await subRes.json();
-    const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || mobile;
+    const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || rawMobile;
 
     // Admin SMS
     const twilioSid  = env.TWILIO_ACCOUNT_SID;
