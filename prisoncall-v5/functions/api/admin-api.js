@@ -325,7 +325,7 @@ export async function onRequest({ request, env }) {
         const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
 
         const assignedMobileDisplay = '0' + transfer.assigned_mobile.substring(2);
-        const smsBody = `TRANSFER COMPLETED - ${customerName} moved to ${transfer.requested_prison} (${transfer.requested_state}). Assigned mobile: ${assignedMobileDisplay}.`;
+        const smsBody = `TRANSFER COMPLETED - ${customerName} moved to ${transfer.new_prison_name} (${transfer.new_prison_state}). Assigned mobile: ${assignedMobileDisplay}.`;
 
         const twilioSid = env.TWILIO_ACCOUNT_SID;
         const twilioAuth = env.TWILIO_AUTH_TOKEN;
@@ -363,7 +363,7 @@ export async function onRequest({ request, env }) {
         const subRows = await subRes.json();
         const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
 
-        const smsBody = `TRANSFER CANCELLED - ${customerName} transfer to ${transfer.requested_prison} (${transfer.requested_state}) has been cancelled.`;
+        const smsBody = `TRANSFER CANCELLED - ${customerName} transfer to ${transfer.new_prison_name} (${transfer.new_prison_state}) has been cancelled.`;
 
         const twilioSid = env.TWILIO_ACCOUNT_SID;
         const twilioAuth = env.TWILIO_AUTH_TOKEN;

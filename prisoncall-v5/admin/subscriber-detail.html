@@ -371,7 +371,7 @@ function renderTransferHistory() {
           <div style="display:flex;flex-direction:column;gap:6px;padding:12px;background:var(--color-surface);border-radius:8px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:#6B7280">${esc(t.old_prison_name || '—')} →</span>
-              <span style="font-size:13px;font-weight:600">${esc(t.requested_prison || '—')}${t.requested_state ? `, ${t.requested_state.toUpperCase()}` : ''}</span>
+              <span style="font-size:13px;font-weight:600">${esc(t.new_prison_name || '—')}${t.new_prison_state ? `, ${t.new_prison_state.toUpperCase()}` : ''}</span>
               ${statusPill(t.status)}
             </div>
             <div style="font-size:12px;color:#6B7280">

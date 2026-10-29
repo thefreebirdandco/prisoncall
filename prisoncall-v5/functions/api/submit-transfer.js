@@ -5,8 +5,8 @@
      subscription_id  <- looked up from subscriptions by old_did (E.164 format)
      old_did          <- did (10-digit local, e.g. "0312345678")
      old_prison_name  <- currentPrison
-     requested_prison <- newPrison
-     requested_state  <- newPrisonState ('vic' | 'nsw')
+     new_prison_name  <- newPrison
+     new_prison_state <- newPrisonState ('vic' | 'nsw')
      assigned_mobile  <- mobile
      status           <- 'PENDING'
    n8n WF3 watches transfers for status = PENDING and sends the confirmation SMS.
@@ -80,8 +80,8 @@ export async function onRequestPost(context) {
     subscription_id:  subscriptionId,   /* FK — null if DID lookup failed */
     old_did:          did,
     old_prison_name:  currentPrison,
-    requested_prison: newPrison,
-    requested_state:  newPrisonState || null,
+    new_prison_name:  newPrison,
+    new_prison_state: newPrisonState || null,
     assigned_mobile:  mobile,
     status:           'PENDING_VOIPLINE',
   };

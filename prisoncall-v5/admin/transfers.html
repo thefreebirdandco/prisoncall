@@ -106,8 +106,8 @@ function renderTable() {
   tbody.innerHTML = pending.map(t => {
     const name   = esc(t.subscriptions?.customer_name || t.assigned_mobile || '\u2014');
     const mobile = esc(formatMobile(t.assigned_mobile));
-    const prison = esc(t.requested_prison || '\u2014');
-    const state  = esc(t.requested_state  || '\u2014');
+    const prison = esc(t.new_prison_name  || '\u2014');
+    const state  = esc(t.new_prison_state || '\u2014');
     const date   = esc(fmtDateTime(t.created_at));
     return `<tr>
       <td class="td-name">${name}</td>
