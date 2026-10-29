@@ -43,6 +43,7 @@ export async function onRequestPost(context) {
   const newPrison      = (body.newPrison       || '').toString().trim();
   const newPrisonState = (body.newPrisonState  || body.currentState || '').toString().trim();
   const mobile         = (body.mobile          || '').replace(/\D/g, '');
+  const bodySealSubId  = (body.seal_subscription_id || '').toString().trim();
 
   if (!did || !currentPrison || !newPrison || !mobile) {
     return jsonResponse({ success: false, error: 'Missing required fields' });
@@ -55,12 +56,14 @@ export async function onRequestPost(context) {
     return jsonResponse({ success: false, error: 'Server misconfiguration' });
   }
 
-  /* ── Look up subscription_id by DID (stored as E.164 "61xxx" in Supabase) ─ */
+  /* ── Look up subscription_id, customer_name, seal_subscription_id by DID ─ */
   let subscriptionId = null;
+  let customerName   = '';
+  let sealSubId      = bodySealSubId;
   try {
     const e164 = toE164(did);
     const subUrl = SUPABASE_URL + '/rest/v1/subscriptions?current_did=eq.' +
-      encodeURIComponent(e164) + '&status=eq.ACTIVE&select=id&limit=1';
+      encodeURIComponent(e164) + '&status=eq.ACTIVE&select=id,customer_name,seal_subscription_id&limit=1';
     const subRes = await fetch(subUrl, {
       headers: {
         Authorization: 'Bearer ' + SUPABASE_KEY,
@@ -70,7 +73,11 @@ export async function onRequestPost(context) {
     });
     if (subRes.ok) {
       const subRows = await subRes.json();
-      if (Array.isArray(subRows) && subRows[0]) subscriptionId = subRows[0].id;
+      if (Array.isArray(subRows) && subRows[0]) {
+        subscriptionId = subRows[0].id;
+        customerName   = subRows[0].customer_name        || '';
+        sealSubId      = subRows[0].seal_subscription_id || bodySealSubId;
+      }
     }
   } catch {
     /* non-fatal — insert will proceed with subscription_id null */
@@ -103,6 +110,24 @@ export async function onRequestPost(context) {
       try { const d = await res.json(); detail = d.message || d.error || ''; } catch {}
       return jsonResponse({ success: false, error: detail || 'Insert failed' });
     }
+
+    /* ── Admin SMS — non-blocking via context.waitUntil ──────────────────── */
+    const twilioSid  = env.TWILIO_ACCOUNT_SID;
+    const twilioAuth = env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = env.TWILIO_SMS_NUMBER;
+    const smsBody    = `TRANSFER REQUEST - Seal ID: ${sealSubId}. ${customerName}. Prison: ${newPrison} (${newPrisonState}). Log in to admin portal to action.`;
+    context.waitUntil(
+      Promise.all(['+61413598815', '+61422749601'].map(to =>
+        fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ From: twilioFrom, To: to, Body: smsBody }),
+        })
+      ))
+    );
 
     return jsonResponse({ success: true });
   } catch {
