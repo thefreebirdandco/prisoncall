@@ -1080,7 +1080,8 @@
           codeError.classList.add('is-visible');
         }
       })
-      .catch(function(){
+      .catch(function(err){
+        console.error('[doVerify] caught:', err);
         newCont.disabled    = false;
         newCont.textContent = 'Verify \u2192';
         codeError.textContent = 'Something went wrong. Please try again.';
@@ -1099,6 +1100,9 @@
      STEP 4 (4A) — Select your new prison
   ═══════════════════════════════════════════════════════════════════════ */
   function buildPrisonListHtml(sv){
+    /* Normalise sv: Supabase prison_state may arrive uppercase or unexpected */
+    sv = (sv || '').toLowerCase();
+    if (sv !== 'vic' && sv !== 'nsw') sv = 'vic';
     var prisons  = PRISONS[sv].slice().sort();
     var current  = state.currentPrison;
     return prisons.map(function(p){
