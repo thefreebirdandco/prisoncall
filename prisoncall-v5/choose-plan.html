@@ -762,8 +762,9 @@
       border-radius: var(--radius-md);
     }
     .order-total__label { font-size: 15px; font-weight: 700; }
-    .order-total__val { display: flex; align-items: baseline; gap: 8px; }
+    .order-total__val { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
     .order-total__orig { text-decoration: line-through; color: var(--color-muted); font-size: 15px; }
+    .order-total__off { font-size: 13px; font-weight: 600; color: #1a5c33; white-space: nowrap; }
     .order-total__disc { color: var(--color-green); font-size: 22px; font-weight: 800; }
     .order-total__plain { font-size: 22px; font-weight: 800; }
     .order-recurring-sub {
@@ -3724,7 +3725,7 @@
   function showBundleDiscountModal(onContinue) {
     var overlay = document.createElement('div');
     overlay.className = 'bundle-modal-overlay';
-    overlay.innerHTML = ['<div class="bundle-modal" role="dialog" aria-modal="true" aria-labelledby="bundleModalHeading">','<button class="path-c-close" id="bundleModalClose" aria-label="Close"><img src="assets/icons/quick_pill_icons/Cancel_Delete.svg" width="18" height="18" alt="" aria-hidden="true" style="display:block;"></button>','<h2 class="bundle-modal__heading" id="bundleModalHeading">Already a Prisoncall customer?</h2>','<p class="bundle-modal__body">Sign in at the next page to automatically save 10% on this plan.</p>','<button class="bundle-modal__btn" type="button">Continue to checkout</button>','</div>'].join('');
+    overlay.innerHTML = ['<div class="bundle-modal" role="dialog" aria-modal="true" aria-labelledby="bundleModalHeading">','<button class="path-c-close" id="bundleModalClose" aria-label="Close"><img src="assets/icons/quick_pill_icons/Cancel_Delete.svg" width="18" height="18" alt="" aria-hidden="true" style="display:block;"></button>','<h2 class="bundle-modal__heading" id="bundleModalHeading">Already a Prisoncall customer?</h2>','<p class="bundle-modal__body">Sign in at checkout for a faster experience using your saved payment details.</p>','<button class="bundle-modal__btn" type="button">Continue to checkout</button>','</div>'].join('');
     document.body.appendChild(overlay);
     overlay.querySelector('.bundle-modal__btn').addEventListener('click', function(){
       if(overlay.parentNode){ overlay.parentNode.removeChild(overlay); }
@@ -3869,8 +3870,7 @@ function renderCompletedArea(){
       var totalHtml;
       if(isBundleOrder){
         totalHtml =
-          '<span class="order-total__orig">$'+rawTotal.toFixed(2)+'</span>'+
-          '<span style="display:block;font-size:12px;color:#1a5c33;font-weight:600;margin-top:2px;">\u2212 $'+discountAmount.toFixed(2)+' bundle discount (10% off)</span>'+
+          '<span class="order-total__off">\u2212 $'+discountAmount.toFixed(2)+'</span>'+
           '<span class="order-total__disc">$'+finalTotal.toFixed(2)+'</span>';
       } else {
         totalHtml = '<span class="order-total__plain">$'+rawTotal.toFixed(2)+'</span>';
@@ -4035,6 +4035,15 @@ function renderCompletedArea(){
 
   /* â”€â”€â”€ Init â”€â”€â”€ */
   (function(){
+    /* Back from Shopify restores this page from cache with the button
+       still reading "Processing…". Reset it when the page is shown again. */
+    window.addEventListener('pageshow', function(){
+      var b = document.getElementById('checkoutBtn');
+      if(!b || b.textContent.indexOf('Processing') === -1) return;
+      b.textContent = 'Activate my number now';
+      b.style.pointerEvents = '';
+    });
+
     /* Wire the Path C modal once — events fire on Step 2→3 transition */
     wirePathCModal();
 
