@@ -76,13 +76,12 @@ export async function onRequestPost(context) {
     let body;
     try { body = await request.json(); } catch (_) { return json({ recognised: false }); }
 
-    let mobile = (body.mobile || '').toString().trim();
+    /* Normalise 04XXXXXXXX, +61XXXXXXXXX, or 61XXXXXXXXX → 61XXXXXXXXX.
+       subscriptions.assigned_mobile and pc_session.mobile both use this form. */
+    let mobile = (body.mobile || '').toString().replace(/\D/g, '');
+    if (mobile.startsWith('0')) mobile = '61' + mobile.slice(1);
 
-    /* Normalise E.164 → 04xxxxxxxxx */
-    if (mobile.startsWith('+61')) mobile = '0' + mobile.slice(3);
-    mobile = mobile.replace(/\D/g, '');
-
-    if (!/^04\d{8}$/.test(mobile)) return json({ recognised: false });
+    if (!/^61\d{9}$/.test(mobile)) return json({ recognised: false });
 
     const row = await querySupabase(env, mobile);
     if (!row) return json({ recognised: false });
