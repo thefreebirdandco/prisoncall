@@ -329,7 +329,7 @@ export async function onRequestPost(context) {
     if (!subscription_id) return json({ error: 'missing_fields' }, 400);
 
     const subRes = await sb(
-      `subscriptions?id=eq.${encodeURIComponent(subscription_id)}&status=in.(ACTIVE,PAUSED)&select=seal_subscription_id,assigned_mobile,status&limit=1`
+      `subscriptions?id=eq.${encodeURIComponent(subscription_id)}&status=in.(ACTIVE,PAUSED)&select=seal_subscription_id,seal_id,assigned_mobile,status&limit=1`
     );
     if (!subRes.ok) return json({ error: 'db_error' }, 500);
     const subData = await subRes.json();
@@ -337,17 +337,26 @@ export async function onRequestPost(context) {
     if (!sub || sub.assigned_mobile !== session.mobile) return json({ error: 'forbidden' }, 403);
     if (sub.status !== 'ACTIVE' && sub.status !== 'PAUSED') return json({ error: 'forbidden' }, 403);
 
-    const sealId = parseInt(sub.seal_subscription_id, 10);
-    const sealRes = await sealApi(env, '/subscription', {
-      method: 'PUT',
-      body: JSON.stringify({ id: sealId, action: 'send_payment_method_update_email' }),
-    });
-    if (!sealRes.ok) {
-      const sealErr = await sealRes.text();
-      console.error('Seal payment update error:', sealErr);
+    // seal_subscription_id is the short Plan ID. Seal's update email needs seal_id.
+    // sealFetch keeps this PUT a PUT if Seal redirects to a trailing slash.
+    const sealId = positiveInt(sub.seal_id) || positiveInt(sub.seal_subscription_id);
+    if (!sealId) return json({ error: 'forbidden' }, 403);
+
+    try {
+      const sealRes = await sealFetch(env, '/subscription', {
+        method: 'PUT',
+        body: JSON.stringify({ id: sealId, action: 'send_payment_method_update_email' }),
+      });
+      if (!sealRes.ok) {
+        const sealErr = await sealRes.text().catch(() => '');
+        console.error('Seal payment update error:', sealRes.status, sealErr.slice(0, 500));
+        return json({ error: 'seal_email_failed' }, 502);
+      }
+      return json({ ok: true, message: 'We\'ve sent a payment update link to your email. Check your inbox.' });
+    } catch (err) {
+      console.error('update-payment-method failed', err && err.message);
       return json({ error: 'seal_email_failed' }, 502);
     }
-    return json({ ok: true, message: 'We\'ve sent a payment update link to your email. Check your inbox.' });
   }
 
   // ─── pay-now ──────────────────────────────────────────────────────────────────
