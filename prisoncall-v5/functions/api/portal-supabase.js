@@ -209,15 +209,23 @@ export async function onRequestPost(context) {
     const sub = subRows[0];
     if (sub.assigned_mobile !== mobile) return json({ error: 'forbidden' }, 403);
 
-    // Call Seal API to cancel the subscription
-    const sealId = parseInt(sub.seal_subscription_id, 10);
-    const sealRes = await sealApi(env, '/subscription', {
-      method: 'PUT',
-      body: JSON.stringify({ id: sealId, action: 'cancel' }),
-    });
-    if (!sealRes.ok) {
-      const sealErr = await sealRes.text();
-      console.error('Seal cancel error:', sealErr);
+    // seal_subscription_id is the short Plan ID. Seal cancel needs seal_id.
+    // sealFetch keeps this PUT a PUT if Seal redirects to a trailing slash.
+    const sealId = positiveInt(sub.seal_id) || positiveInt(sub.seal_subscription_id);
+    if (!sealId) return json({ error: 'not_found' }, 404);
+
+    try {
+      const sealRes = await sealFetch(env, '/subscription', {
+        method: 'PUT',
+        body: JSON.stringify({ id: sealId, action: 'cancel' }),
+      });
+      if (!sealRes.ok) {
+        const sealErr = await sealRes.text().catch(() => '');
+        console.error('Seal cancel error:', sealRes.status, sealErr.slice(0, 500));
+        return json({ error: 'seal_cancel_failed' }, 502);
+      }
+    } catch (err) {
+      console.error('cancel-subscription failed', err && err.message);
       return json({ error: 'seal_cancel_failed' }, 502);
     }
 
