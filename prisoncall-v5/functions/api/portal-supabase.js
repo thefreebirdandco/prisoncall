@@ -53,6 +53,82 @@ function sealApi(env, path, opts = {}) {
   });
 }
 
+function positiveInt(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!/^[0-9]+$/.test(text)) return null;
+  const n = Number(text);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+function sealRequestHeaders(env) {
+  return {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'X-Seal-Token': String(env.SEAL_API_TOKEN || '').trim(),
+  };
+}
+
+// Seal 301s some routes onto a trailing slash. Workers would follow that
+// redirect as GET and drop the PUT body, so follow it manually and keep the method.
+async function sealFetch(env, path, opts = {}) {
+  const headers = sealRequestHeaders(env);
+  if (!headers['X-Seal-Token']) {
+    return new Response(JSON.stringify({ error: 'missing_seal_token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const init = {
+    method: opts.method || 'GET',
+    headers,
+    body: opts.body,
+    redirect: 'manual',
+  };
+  let res = await fetch(`${SEAL_API}${path}`, init);
+  if ([301, 302, 307, 308].includes(res.status)) {
+    const location = res.headers.get('Location');
+    if (res.body && res.body.cancel) await res.body.cancel().catch(() => {});
+    if (location) {
+      const nextUrl = new URL(location, `${SEAL_API}${path}`);
+      res = await fetch(nextUrl, init);
+    }
+  }
+  return res;
+}
+
+function pickBillingAttemptId(attempts, preferred) {
+  const list = Array.isArray(attempts) ? attempts : [];
+  const withId = list
+    .map((attempt) => ({ attempt, id: positiveInt(attempt && attempt.id) }))
+    .filter((entry) => entry.id);
+  if (preferred && withId.some((entry) => entry.id === preferred)) return preferred;
+  const failed = withId.find(({ attempt }) => {
+    const status = String(attempt.status || '').toLowerCase();
+    return attempt.error_code || status.includes('fail') || status.includes('error');
+  });
+  if (failed) return failed.id;
+  const open = withId.find(({ attempt }) => {
+    const status = String(attempt.status || '').toLowerCase();
+    return status !== 'completed' && !attempt.completed_at;
+  });
+  if (open) return open.id;
+  return preferred;
+}
+
+async function findSealSubscription(env, candidates) {
+  const ids = candidates.filter(Boolean);
+  for (const id of ids) {
+    const res = await sealFetch(env, `/subscription/?id=${id}`);
+    if (!res.ok) continue;
+    const data = await res.json().catch(() => null);
+    const payload = data && data.success ? data.payload : null;
+    if (!payload) continue;
+    const payloadIds = [positiveInt(payload.id), positiveInt(payload.internal_id)];
+    if (payloadIds.some((payloadId) => ids.includes(payloadId))) return payload;
+  }
+  return null;
+}
+
 // ─── GET handler — read-only actions ───────────────────────────────────────
 
 export async function onRequestGet(context) {
@@ -278,36 +354,57 @@ export async function onRequestPost(context) {
     const { seal_subscription_id } = body;
     if (!seal_subscription_id) return json({ error: 'missing_fields' }, 400);
 
-    // Fetch subscription from Supabase — verify ownership and status server-side
+    // Fetch subscription from Supabase — verify ownership and status server-side.
+    // seal_subscription_id is the short Plan ID; Seal's charge API needs the
+    // subscription id from seal_id (not the internal id) and a numeric billing attempt.
     const subRes = await sb(
-      `subscriptions?seal_subscription_id=eq.${encodeURIComponent(seal_subscription_id)}&select=assigned_mobile,status,latest_billing_attempt_id,seal_subscription_id&limit=1`
+      `subscriptions?seal_subscription_id=eq.${encodeURIComponent(seal_subscription_id)}&select=assigned_mobile,status,latest_billing_attempt_id,seal_subscription_id,seal_id&limit=1`
     );
-    if (!subRes.ok) return json({ error: 'db_error' }, 500);
+    if (!subRes.ok) {
+      const dbText = await subRes.text().catch(() => '');
+      console.error('pay-now supabase error', subRes.status, dbText.slice(0, 300));
+      return json({ error: 'db_error' }, 500);
+    }
     const subData = await subRes.json();
     const sub = Array.isArray(subData) ? subData[0] : null;
 
     if (!sub || sub.assigned_mobile !== session.mobile) return json({ ok: false, error: 'Not found' }, 404);
     if (sub.status !== 'PAUSED') return json({ ok: false, error: 'Subscription is not paused' }, 400);
 
-    const sealId = parseInt(sub.seal_subscription_id, 10);
-    if (!sealId) return json({ ok: false, error: 'Not found' }, 404);
+    try {
+      const candidates = [positiveInt(sub.seal_id), positiveInt(sub.seal_subscription_id)];
+      const payload = await findSealSubscription(env, candidates);
+      const subscriptionId = payload
+        ? positiveInt(payload.id)
+        : (candidates[0] || candidates[1]);
+      const billingAttemptId = pickBillingAttemptId(
+        payload && payload.billing_attempts,
+        positiveInt(sub.latest_billing_attempt_id)
+      );
 
-    // Merchant API — billing_attempt_id and subscription id come from the verified row, not the client
-    const sealRes = await sealApi(env, '/subscription-process-charge', {
-      method: 'PUT',
-      body: JSON.stringify({
-        subscription_id: sealId,
-        billing_attempt_id: sub.latest_billing_attempt_id || '',
-      }),
-    });
+      if (!subscriptionId || !billingAttemptId) {
+        return json({ ok: false, error: 'No outstanding charge was found for this plan.' }, 409);
+      }
 
-    if (!sealRes.ok) {
-      const errText = await sealRes.text().catch(() => '');
-      console.error('Seal process-charge error', sealRes.status, errText);
-      return json({ ok: false, error: `Payment processor error (${sealRes.status})` }, 502);
+      const sealRes = await sealFetch(env, '/subscription-process-charge/', {
+        method: 'PUT',
+        body: JSON.stringify({
+          subscription_id: subscriptionId,
+          billing_attempt_id: billingAttemptId,
+        }),
+      });
+
+      if (!sealRes.ok) {
+        const errText = await sealRes.text().catch(() => '');
+        console.error('Seal process-charge error', sealRes.status, errText.slice(0, 500));
+        return json({ ok: false, error: `Payment processor error (${sealRes.status})` }, 502);
+      }
+
+      return json({ ok: true });
+    } catch (err) {
+      console.error('pay-now failed', err && err.message);
+      return json({ ok: false, error: 'Payment processor error' }, 502);
     }
-
-    return json({ ok: true });
   }
 
   // ── cancel-transfer-request ──────────────────────────────────────────────
