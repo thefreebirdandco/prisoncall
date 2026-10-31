@@ -328,10 +328,14 @@ export async function onRequestPost(context) {
     const { subscription_id } = body;
     if (!subscription_id) return json({ error: 'missing_fields' }, 400);
 
-    const subRes = await sb(`subscriptions?id=eq.${encodeURIComponent(subscription_id)}&select=seal_subscription_id,assigned_mobile&limit=1`);
+    const subRes = await sb(
+      `subscriptions?id=eq.${encodeURIComponent(subscription_id)}&status=in.(ACTIVE,PAUSED)&select=seal_subscription_id,assigned_mobile,status&limit=1`
+    );
+    if (!subRes.ok) return json({ error: 'db_error' }, 500);
     const subData = await subRes.json();
     const sub = Array.isArray(subData) ? subData[0] : null;
     if (!sub || sub.assigned_mobile !== session.mobile) return json({ error: 'forbidden' }, 403);
+    if (sub.status !== 'ACTIVE' && sub.status !== 'PAUSED') return json({ error: 'forbidden' }, 403);
 
     const sealId = parseInt(sub.seal_subscription_id, 10);
     const sealRes = await sealApi(env, '/subscription', {
