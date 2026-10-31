@@ -22,7 +22,8 @@ function json(data, status = 200) {
   });
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest(context) {
+  const { request, env } = context;
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
@@ -165,7 +166,7 @@ export async function onRequest({ request, env }) {
         const data = await r.json();
         if (!r.ok) return json({ error: data.message || 'Update failed' }, 500);
 
-        // Fire PAUSED→ACTIVE notifications (non-blocking)
+        // Fire PAUSED→ACTIVE notifications — non-blocking via context.waitUntil
         if (prevSub?.status === 'PAUSED' && patch.status === 'ACTIVE') {
           const twilioSid  = env.TWILIO_ACCOUNT_SID;
           const twilioAuth = env.TWILIO_AUTH_TOKEN;
@@ -185,11 +186,13 @@ export async function onRequest({ request, env }) {
             }
           );
 
-          Promise.all([
-            sendSms(customerTo, 'Your payment cleared. Your Prisoncall number is active again.'),
-            sendSms('+61413598815', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
-            sendSms('+61422749601', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
-          ]).catch(err => console.error('PAUSED→ACTIVE SMS error:', err));
+          context.waitUntil(
+            Promise.all([
+              sendSms(customerTo, 'Your payment cleared. Your Prisoncall number is active again.'),
+              sendSms('+61413598815', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
+              sendSms('+61422749601', `PAYMENT RESTORED - ${customerName} is now ACTIVE. Customer has been notified.`),
+            ]).catch(err => console.error('PAUSED→ACTIVE SMS error:', err))
+          );
         }
 
         return json({ data: Array.isArray(data) ? data[0] : data });
