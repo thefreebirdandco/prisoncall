@@ -142,7 +142,7 @@ function applyFilters() {
 
 function renderTable() {
   const isMobile = window.innerWidth <= 768;
-  document.getElementById('countBadge').textContent = `${filtered.length} subscriber${filtered.length !== 1 ? 's' : ''}`;
+  document.getElementById('countBadge').textContent = `${filtered.length} plan${filtered.length !== 1 ? 's' : ''}`;
 
   if (isMobile) {
     document.querySelector('.table-wrap').style.display = 'none';
