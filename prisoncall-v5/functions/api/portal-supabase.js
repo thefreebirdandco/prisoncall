@@ -280,7 +280,7 @@ export async function onRequestPost(context) {
 
     // Fetch subscription from Supabase — verify ownership and status server-side
     const subRes = await sb(
-      `subscriptions?seal_subscription_id=eq.${encodeURIComponent(seal_subscription_id)}&select=assigned_mobile,status,latest_billing_attempt_id&limit=1`
+      `subscriptions?seal_subscription_id=eq.${encodeURIComponent(seal_subscription_id)}&select=assigned_mobile,status,latest_billing_attempt_id,seal_subscription_id&limit=1`
     );
     if (!subRes.ok) return json({ error: 'db_error' }, 500);
     const subData = await subRes.json();
@@ -289,18 +289,17 @@ export async function onRequestPost(context) {
     if (!sub || sub.assigned_mobile !== session.mobile) return json({ ok: false, error: 'Not found' }, 404);
     if (sub.status !== 'PAUSED') return json({ ok: false, error: 'Subscription is not paused' }, 400);
 
-    // Call Seal subscription-process-charge — billing_attempt_id read from Supabase, not from client
-    const sealRes = await fetch(
-      `https://seal-subscriptions.com/api/v1/subscriptions/${seal_subscription_id}/subscription-process-charge`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Seal-Api-Token': env.SEAL_API_TOKEN,
-        },
-        body: JSON.stringify({ billing_attempt_id: sub.latest_billing_attempt_id || '' }),
-      }
-    );
+    const sealId = parseInt(sub.seal_subscription_id, 10);
+    if (!sealId) return json({ ok: false, error: 'Not found' }, 404);
+
+    // Merchant API — billing_attempt_id and subscription id come from the verified row, not the client
+    const sealRes = await sealApi(env, '/subscription-process-charge', {
+      method: 'PUT',
+      body: JSON.stringify({
+        subscription_id: sealId,
+        billing_attempt_id: sub.latest_billing_attempt_id || '',
+      }),
+    });
 
     if (!sealRes.ok) {
       const errText = await sealRes.text().catch(() => '');
