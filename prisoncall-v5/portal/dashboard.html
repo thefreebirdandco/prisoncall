@@ -775,6 +775,10 @@
 
           '<div class="pc-card__body">',
             '<div class="pc-row">',
+              '<span class="pc-key">Plan ID</span>',
+              '<span class="pc-val">' + PortalAuth.esc(sub.seal_subscription_id || '') + '</span>',
+            '</div>',
+            '<div class="pc-row">',
               '<span class="pc-key">Prison</span>',
               '<span class="pc-val">' + PortalAuth.esc(sub.prison_name) + (sub.prison_state ? ', ' + PortalAuth.esc(sub.prison_state) : '') + '</span>',
             '</div>',
