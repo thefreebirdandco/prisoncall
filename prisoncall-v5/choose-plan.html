@@ -802,7 +802,7 @@
     .mobile-continue:disabled:hover { opacity: 0.4; transform: none; }
 
     /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       OTP FLOW â€” DEV, remove at integration
+       OTP FLOW â€” live mobile verification
     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
     .otp-send-sub {
       font-size: 12px; color: var(--color-muted); margin-top: 10px; line-height: 1.5;
@@ -863,49 +863,6 @@
       margin-top: 24px;
       margin-bottom: 0;
     }
-
-    /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       DEV TOGGLE PANEL â€” staging only, remove at integration
-    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-    .dev-panel {
-      position: fixed; bottom: 16px; right: 16px; z-index: 9999;
-      background: #1a1a1a; color: #fff;
-      padding: 12px 14px; border-radius: 10px;
-      font-family: var(--font-family);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-      min-width: 148px;
-    }
-    .dev-panel__title {
-      font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
-      text-transform: uppercase; color: rgba(255,255,255,0.38);
-      margin-bottom: 10px;
-    }
-    .dev-panel__row {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; margin-bottom: 8px;
-    }
-    .dev-panel__row:last-child { margin-bottom: 0; }
-    .dev-panel__label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.82); }
-    .dev-toggle { position: relative; display: inline-block; width: 34px; height: 19px; flex-shrink: 0; }
-    .dev-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-    .dev-toggle__track {
-      position: absolute; inset: 0; background: #444;
-      border-radius: 10px; cursor: pointer; transition: background 150ms ease;
-    }
-    .dev-toggle__track::after {
-      content: ''; position: absolute; top: 3px; left: 3px;
-      width: 13px; height: 13px; background: #fff; border-radius: 50%;
-      transition: transform 150ms ease;
-    }
-    .dev-toggle input:checked + .dev-toggle__track { background: #00D258; }
-    .dev-toggle input:checked + .dev-toggle__track::after { transform: translateX(15px); }
-    .dev-panel__btn {
-      display: block; width: 100%; margin-top: 10px;
-      padding: 6px 10px; font-size: 11px; font-weight: 700; font-family: inherit;
-      background: #00D258; color: #000; border: none; border-radius: 6px; cursor: pointer;
-      text-align: center; letter-spacing: 0.04em;
-    }
-    .dev-panel__btn:hover { opacity: 0.85; }
 
     /* --- Bundle discount modal --- */
     .bundle-modal-overlay {
@@ -1472,15 +1429,9 @@
   <script>
   'use strict';
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     DEV FLAGS â€” staging only. Toggled via the dev panel below.
-     Remove this object and all DEV_FLAGS references at integration.
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
   /* PRICING is fetched live from the Supabase products table on page load.
      Populated by fetchPricing() below — do not hardcode here. */
   var PRICING = null;
-
-  var DEV_FLAGS = { OTP: false };
 
   /* ═══════════════════════════════════════════════════════════════════════
      PRICING FETCH — loads active products from the /api/products endpoint
@@ -1941,8 +1892,8 @@
   var BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
 
   /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     DEV â€” OTP MOBILE VERIFICATION HELPERS
-     Remove showOtpSendPhase and showOtpVerifyPhase at integration.
+     OTP mobile verification
+     Live mobile verification via /send-otp and /verify-otp.
   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
   /* Phase 1: valid mobile entered â€” hide Continue, show Send Code + subtitle */
@@ -1964,11 +1915,6 @@
     var sendError = sendWrap.querySelector('.otp-send-error');
 
     sendBtn.addEventListener('click', function(){
-      if(DEV_FLAGS.OTP){
-        /* Bypass mode: skip API, go straight to verify phase */
-        showOtpVerifyPhase(stepEl, digits, cont, false);
-        return;
-      }
       /* Real mode: call Twilio send-otp */
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending\u2026';
@@ -1998,7 +1944,7 @@
     });
   }
 
-  /* Phase 2: code entry â€” validates 111111 (pass) / anything else (fail) */
+  /* Phase 2: code entry — calls /verify-otp */
   function showOtpVerifyPhase(stepEl, digits, originalCont, codeSent){
     /* Hide mobile input area + send phase */
     var mobileInput = stepEl.querySelector('.mobile-input');
@@ -2049,12 +1995,6 @@
       codeInput.value = '';
       codeInput.classList.remove('has-error');
       codeError.classList.remove('is-visible');
-      if(DEV_FLAGS.OTP){
-        resendBtn.textContent = 'Code resent.';
-        setTimeout(function(){ resendBtn.innerHTML = origHTML; }, 2500);
-        codeInput.focus();
-        return;
-      }
       resendBtn.disabled = true;
       resendBtn.textContent = 'Sending\u2026';
       fetch('/send-otp', {
@@ -2108,17 +2048,6 @@
 
     function doVerify(){
       var code = codeInput.value.replace(/\D/g,'').replace(/\s+/g,'');
-      if(DEV_FLAGS.OTP){
-        /* Bypass mode: 111111 passes, anything else fails */
-        if(code === '111111'){
-          handleVerifySuccess();
-        } else {
-          codeInput.classList.add('has-error');
-          codeError.textContent = 'Incorrect code. Please try again.';
-          codeError.classList.add('is-visible');
-        }
-        return;
-      }
       /* Real mode: call /verify-otp */
       if(code.length < 6){
         codeInput.classList.add('has-error');
@@ -2716,7 +2645,6 @@
     }
 
     function collapseToPhaseA() {
-      console.log('[DEBUG] collapseToPhaseA called');
       dismissAllToasts();
       selectedAddons = defaultSelectedAddons();
       step4CustomiseMode = false;
@@ -2774,7 +2702,6 @@
     /* Change plan — collapse to Phase A */
     el.querySelectorAll('[data-change-plan]').forEach(function(btn){
       btn.addEventListener('click', function(e){
-        console.log('[DEBUG] data-change-plan click fired', e.target, 'propagation stopped:', e.cancelBubble);
         e.stopPropagation();
         collapseToPhaseA();
       });
@@ -3149,18 +3076,6 @@
       if (cb)    showRow(cb);
       showComboToast('We have upgraded you to the Bundle Deal - better value');
       updateLivePriceDisplay(stepEl);
-      setTimeout(function() {
-        var btn = document.querySelector('[data-change-plan]');
-        if (btn) {
-          var r = btn.getBoundingClientRect();
-          var cx = Math.round(r.left + r.width / 2);
-          var cy = Math.round(r.top + r.height / 2);
-          var top = document.elementFromPoint(cx, cy);
-          console.log('[DEBUG] autoUpgrade elementFromPoint at ('+cx+','+cy+'):', top);
-          console.log('[DEBUG] btn rect top='+r.top.toFixed(0)+' left='+r.left.toFixed(0)+' w='+r.width.toFixed(0)+' h='+r.height.toFixed(0));
-          console.log('[DEBUG] btn computed pointerEvents='+getComputedStyle(btn).pointerEvents+' display='+getComputedStyle(btn).display+' zIndex='+getComputedStyle(btn).zIndex);
-        }
-      }, 400);
     }
 
     /* ── Customise link — State 1 only; click rebuilds protect section in State 2 ── */
@@ -4089,57 +4004,6 @@ function renderCompletedArea(){
       localStorage.removeItem('prisoncall_checkout_state');
     }
     startNewPlan(getUrlState(), getUrlPrison());
-  }());
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     DEV PANEL — inject only on staging domain (prisoncall.pages.dev).
-     Never appears on prisoncall.com.au or any other domain.
-     Remove this entire IIFE at integration.
-  ═══════════════════════════════════════════════════════════════════════ */
-  (function(){
-    if(window.location.hostname !== 'prisoncall.pages.dev') return;
-    var panel = document.createElement('div');
-    panel.className = 'dev-panel';
-    panel.setAttribute('role', 'region');
-    panel.setAttribute('aria-label', 'Developer tools');
-    panel.innerHTML = [
-      '<p class="dev-panel__title">Dev Tools</p>',
-      '<div class="dev-panel__row">',
-        '<span class="dev-panel__label">OTP Verify</span>',
-        '<label class="dev-toggle" aria-label="Toggle OTP Verify">',
-          '<input type="checkbox" id="devToggleOTP">',
-          '<span class="dev-toggle__track"></span>',
-        '</label>',
-      '</div>',
-      '<button class="dev-panel__btn" id="devSkipToStep4" type="button">Skip to Step 4</button>'
-    ].join('');
-    document.body.appendChild(panel);
-    /* Wire toggle to DEV_FLAGS — updates take effect immediately */
-    document.getElementById('devToggleOTP').addEventListener('change', function(){
-      DEV_FLAGS.OTP = this.checked;
-    });
-    document.getElementById('devSkipToStep4').addEventListener('click', function(){
-      entries = [];
-      selectedAddons = defaultSelectedAddons();
-      cur = { id: nextId++, state: 'vic', prison: 'Melbourne Assessment Prison', mobile: '0400000001', planKey: null };
-      editId = null;
-      clearGate();
-      planFlow.innerHTML = '';
-      renderCompletedArea();
-      var s1 = buildStep1El('vic');
-      planFlow.appendChild(s1);
-      wireStep1(s1);
-      var s2 = buildStep2El('vic', 'Melbourne Assessment Prison');
-      planFlow.appendChild(s2);
-      wireStep2(s2);
-      var s3 = buildStep3El('0400000001');
-      planFlow.appendChild(s3);
-      wireStep3(s3);
-      var s4 = buildStep4El('monthly');
-      planFlow.appendChild(s4);
-      wireStep4(s4);
-      scrollToEl(s4, true);
-    });
   }());
 
   </script>

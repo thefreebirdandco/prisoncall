@@ -257,50 +257,6 @@ export async function onRequestPost(context) {
     });
   }
 
-  // ── dev-bypass ───────────────────────────────────────────────────────────
-  if (action === 'dev-bypass') {
-    const sb2 = makeSb(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-    const activeRes = await sb2(`subscriptions?status=eq.ACTIVE&limit=1&select=assigned_mobile,seal_subscription_id,customer_email`);
-    let sessionPayload;
-
-    if (activeRes.ok) {
-      const rows = await activeRes.json();
-      if (rows.length) {
-        const row = rows[0];
-        sessionPayload = JSON.stringify({
-          mobile: row.assigned_mobile,
-          seal_subscription_id: row.seal_subscription_id || '',
-          email: row.customer_email || '',
-        });
-      }
-    }
-
-    if (!sessionPayload) {
-      sessionPayload = JSON.stringify({
-        mobile: '0400000001',
-        seal_subscription_id: '',
-        email: 'test@prisoncall.com.au',
-      });
-    }
-
-    const cookieHeader = [
-      `pc_session=${encodeURIComponent(sessionPayload)}`,
-      'HttpOnly',
-      'Secure',
-      'SameSite=Lax',
-      'Path=/',
-      'Max-Age=2592000',
-    ].join('; ');
-
-    return new Response(JSON.stringify({ success: true, redirect: '/portal/dashboard.html' }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Set-Cookie': cookieHeader,
-      },
-    });
-  }
-
   // ─── get-seal-data ──────────────────────────────────────────────────────────
   if (action === 'get-seal-data') {
     const session = getSession(request);

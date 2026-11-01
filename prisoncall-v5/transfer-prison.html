@@ -252,39 +252,6 @@
     .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
     .hidden { display: none !important; }
 
-    /* ═══ DEV PANEL (staging only) ═══ */
-    .dev-panel {
-      position: fixed; bottom: 16px; right: 16px; z-index: 9999;
-      background: #1a1a1a; color: #fff;
-      padding: 12px 14px; border-radius: 10px;
-      font-family: var(--font-family);
-      min-width: 148px;
-    }
-    .dev-panel__title {
-      font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
-      text-transform: uppercase; color: rgba(255,255,255,0.38);
-      margin-bottom: 10px;
-    }
-    .dev-panel__row {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; margin-bottom: 8px;
-    }
-    .dev-panel__row:last-child { margin-bottom: 0; }
-    .dev-panel__label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.82); }
-    .dev-toggle { position: relative; display: inline-block; width: 34px; height: 19px; flex-shrink: 0; }
-    .dev-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-    .dev-toggle__track {
-      position: absolute; inset: 0; background: #444;
-      border-radius: 10px; cursor: pointer; transition: background 150ms ease;
-    }
-    .dev-toggle__track::after {
-      content: ''; position: absolute; top: 3px; left: 3px;
-      width: 13px; height: 13px; background: #fff; border-radius: 50%;
-      transition: transform 150ms ease;
-    }
-    .dev-toggle input:checked + .dev-toggle__track { background: #00D258; }
-    .dev-toggle input:checked + .dev-toggle__track::after { transform: translateX(15px); }
-
     /* ═══ TRANSFER PRISON — PAGE-SPECIFIC STYLES ═══ */
 
     /* DID split input (prefix + suffix) */
@@ -540,8 +507,6 @@
     newPrison:       null,  /* chosen in Step 4A */
     sealSubId:       null,  /* from URL ?sub_id= — included in submit payload */
   };
-
-  var devSkipStep3 = false;
 
   /* ═══════════════════════════════════════════════════════════════════════
      DOM REFS + CONSTANTS
@@ -862,19 +827,6 @@
       removeStepsFrom(3);
       scrollToEl(getStepEl(2), true);
     });
-
-    /* DEV SKIP — staging bypass */
-    if(devSkipStep3){
-      state.confirmedMobile = '0400000000';
-      setTimeout(function(){
-        removeStepsFrom(4);
-        var s4 = buildStep4El();
-        tpFlow.appendChild(s4);
-        wireStep4(s4);
-        scrollToEl(s4, true);
-      }, 80);
-      return;
-    }
 
     /* Format as user types — exact copy from choose-plan.html wireStep3 */
     input.addEventListener('input', function(){
@@ -1281,29 +1233,6 @@
     ].join('');
     return el;
   }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     DEV TOOLS PANEL — staging only (prisoncall.pages.dev)
-  ═══════════════════════════════════════════════════════════════════════ */
-  (function(){
-    if(window.location.hostname !== 'prisoncall.pages.dev') return;
-    var panel = document.createElement('div');
-    panel.className = 'dev-panel';
-    panel.innerHTML = [
-      '<p class="dev-panel__title">DEV TOOLS</p>',
-      '<div class="dev-panel__row">',
-        '<span class="dev-panel__label">Skip Step 3</span>',
-        '<label class="dev-toggle">',
-          '<input type="checkbox" id="devSkipOtp">',
-          '<span class="dev-toggle__track"></span>',
-        '</label>',
-      '</div>',
-    ].join('');
-    document.body.appendChild(panel);
-    document.getElementById('devSkipOtp').addEventListener('change', function(e){
-      devSkipStep3 = e.target.checked;
-    });
-  }());
 
   /* ═══════════════════════════════════════════════════════════════════════
      INIT — inject Step 1 and kick off the flow

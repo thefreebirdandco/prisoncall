@@ -353,43 +353,6 @@
       mobileInput.focus();
     });
 
-    /* ═══════════════════════════════════
-       DEV TOOLS BYPASS — staging only
-       Shows only on prisoncall.pages.dev
-    ═══════════════════════════════════ */
-    (function () {
-      if (window.location.hostname !== 'prisoncall.pages.dev') return;
-
-      var panel = document.createElement('div');
-      panel.className = 'dev-panel';
-      panel.setAttribute('role', 'region');
-      panel.setAttribute('aria-label', 'Developer tools');
-      panel.innerHTML =
-        '<p class="dev-panel__title">DEV TOOLS</p>' +
-        '<button class="dev-panel__btn" id="devBypassBtn">Bypass login - use test session</button>';
-      document.body.appendChild(panel);
-
-      document.getElementById('devBypassBtn').addEventListener('click', function () {
-        var btn = this;
-        btn.disabled = true;
-        btn.textContent = 'Loading...';
-
-        fetch('/api/portal-supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'dev-bypass' }),
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            window.location.replace(data.redirect || '/portal/dashboard.html');
-          })
-          .catch(function () {
-            btn.disabled = false;
-            btn.textContent = 'Bypass login - use test session';
-            alert('Dev bypass failed. Check console.');
-          });
-      });
-    })();
   </script>
 
 </body>

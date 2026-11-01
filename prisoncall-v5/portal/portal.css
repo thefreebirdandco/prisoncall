@@ -584,33 +584,6 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 
 /* ═══════════════════════════════════
-   DEV TOOLS PANEL (staging only)
-═══════════════════════════════════ */
-.dev-panel {
-  position: fixed; bottom: 16px; right: 16px; z-index: 9999;
-  background: #1a1a1a; color: #fff;
-  padding: 12px 14px; border-radius: 10px;
-  font-family: var(--font-family);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  min-width: 160px;
-}
-.dev-panel__title {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
-  text-transform: uppercase; color: rgba(255,255,255,0.38);
-  margin-bottom: 10px;
-}
-.dev-panel__btn {
-  display: block; width: 100%;
-  background: var(--color-green); color: #000;
-  border: none; border-radius: 6px;
-  padding: 7px 12px; font-size: 11px; font-weight: 700;
-  cursor: pointer; font-family: var(--font-family);
-  transition: opacity var(--transition-fast);
-}
-.dev-panel__btn:hover { opacity: 0.85; }
-.dev-panel__btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ═══════════════════════════════════
    PANEL LOADING STATE
 ═══════════════════════════════════ */
 .panel-loading {
