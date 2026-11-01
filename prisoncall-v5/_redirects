@@ -1,1 +1,3 @@
+/cart/c/* https://checkout.prisoncall.com.au/cart/c/:splat 302
+/checkouts/* https://checkout.prisoncall.com.au/checkouts/:splat 302
 /products/be-free /choose-plan.html 301
