@@ -4,9 +4,10 @@
  * Supports two request formats:
  *
  * NEW (simple): { variant_id, assigned_mobile, redirect_after }
- *   Builds a single-line cart with an assigned_mobile attribute, optionally
- *   appends ?return_url=<redirect_after> to the Shopify checkoutUrl, and
- *   returns { checkout_url }.
+ *   Builds a single-line cart with an assigned_mobile attribute. When
+ *   redirect_after starts with https://prisoncall.com.au/, stores it as a
+ *   cart attribute { key: "return_url" } for order note_attributes.
+ *   Returns { checkout_url }.
  *
  * LEGACY: { lineItems, attributes, discountCodes }
  *   Full cart build used by choose-plan.html. Returns { success, checkoutUrl }.
@@ -67,6 +68,12 @@ export async function onRequestPost(context) {
         attributes: [{ key: 'assigned_mobile', value: String(body.assigned_mobile || '') }],
       }],
     };
+    /* Cart-level attribute becomes order note_attributes.return_url for WF9.
+       Only same-origin Prisoncall return URLs are stored. */
+    const redirectAfter = body.redirect_after;
+    if (typeof redirectAfter === 'string' && redirectAfter.startsWith('https://prisoncall.com.au/')) {
+      cartInput.attributes = [{ key: 'return_url', value: redirectAfter }];
+    }
   } else {
     /* Legacy format: pass through pre-built lineItems/attributes/discountCodes */
     cartInput = {
@@ -129,11 +136,6 @@ export async function onRequestPost(context) {
 
   /* ── Return format matches request format ─────────────────────────────── */
   if (isSimple) {
-    /* Optionally append ?return_url for post-checkout redirect */
-    if (body.redirect_after) {
-      const sep = checkoutUrl.includes('?') ? '&' : '?';
-      checkoutUrl += sep + 'return_url=' + encodeURIComponent(body.redirect_after);
-    }
     return jsonRes({ checkout_url: checkoutUrl });
   } else {
     /* Legacy response shape — choose-plan.html checks data.checkoutUrl */
