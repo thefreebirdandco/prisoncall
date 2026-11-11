@@ -7,7 +7,7 @@
  *   Builds a single-line cart with an assigned_mobile attribute. When
  *   redirect_after starts with https://prisoncall.com.au/, stores it as a
  *   cart attribute { key: "return_url" } for order note_attributes.
- *   Returns { checkout_url }.
+ *   Returns { checkout_url } with skip_shop_pay=true so checkout stays off Shop Pay.
  *
  * LEGACY: { lineItems, attributes, discountCodes }
  *   Full cart build used by choose-plan.html. Returns { success, checkoutUrl }.
@@ -20,7 +20,7 @@
 const CART_CREATE_MUTATION = `
   mutation cartCreate($input: CartInput!) {
     cartCreate(input: $input) {
-      cart { id checkoutUrl }
+      cart { id checkoutUrl attributes { key value } }
       userErrors { field message }
     }
   }
@@ -59,6 +59,7 @@ export async function onRequestPost(context) {
   const isSimple = !!body.variant_id;
 
   let cartInput;
+  let redirectAfterValid = false;
   if (isSimple) {
     /* New format: build a single-line cart from variant_id + assigned_mobile */
     cartInput = {
@@ -71,7 +72,8 @@ export async function onRequestPost(context) {
     /* Cart-level attribute becomes order note_attributes.return_url for WF9.
        Only same-origin Prisoncall return URLs are stored. */
     const redirectAfter = body.redirect_after;
-    if (typeof redirectAfter === 'string' && redirectAfter.startsWith('https://prisoncall.com.au/')) {
+    redirectAfterValid = typeof redirectAfter === 'string' && redirectAfter.startsWith('https://prisoncall.com.au/');
+    if (redirectAfterValid) {
       cartInput.attributes = [{ key: 'return_url', value: redirectAfter }];
     }
   } else {
@@ -136,6 +138,20 @@ export async function onRequestPost(context) {
 
   /* ── Return format matches request format ─────────────────────────────── */
   if (isSimple) {
+    if (redirectAfterValid) {
+      const attrs = (cartCreate.cart && cartCreate.cart.attributes) || [];
+      const hasReturnUrl = attrs.some(function (attr) {
+        return attr && attr.key === 'return_url';
+      });
+      if (!hasReturnUrl) {
+        console.warn('[shopify-cart] return_url was not stored on cart.attributes:', JSON.stringify(attrs));
+      }
+    }
+    /* Shop Pay drops cart attributes. Stay on the store checkout. */
+    if (!/[?&]skip_shop_pay=/.test(checkoutUrl)) {
+      const sep = checkoutUrl.includes('?') ? '&' : '?';
+      checkoutUrl += sep + 'skip_shop_pay=true';
+    }
     return jsonRes({ checkout_url: checkoutUrl });
   } else {
     /* Legacy response shape — choose-plan.html checks data.checkoutUrl */
