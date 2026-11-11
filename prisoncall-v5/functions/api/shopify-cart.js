@@ -172,7 +172,12 @@ export async function onRequestPost(context) {
         }
       }
     }
-    return jsonRes({ checkout_url: checkoutUrl });
+    const res = jsonRes({ checkout_url: checkoutUrl });
+    const debugRedirect = (typeof body.redirect_after === 'string' && body.redirect_after)
+      ? body.redirect_after
+      : 'missing';
+    res.headers.set('X-Debug-Redirect', debugRedirect);
+    return res;
   } else {
     /* Legacy response shape — choose-plan.html checks data.checkoutUrl */
     return jsonRes({ success: true, checkoutUrl: checkoutUrl });
