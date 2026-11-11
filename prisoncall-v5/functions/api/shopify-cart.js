@@ -6,8 +6,8 @@
  * NEW (simple): { variant_id, assigned_mobile, redirect_after }
  *   Builds a single-line cart with an assigned_mobile attribute. When
  *   redirect_after starts with https://prisoncall.com.au/, stores it as a
- *   cart attribute { key: "return_url" } for order note_attributes.
- *   Returns { checkout_url } with skip_shop_pay=true so checkout stays off Shop Pay.
+ *   cart attribute { key: "return_url" } and inserts a transfer_intents row.
+ *   Returns { checkout_url } exactly as Shopify sends it.
  *
  * LEGACY: { lineItems, attributes, discountCodes }
  *   Full cart build used by choose-plan.html. Returns { success, checkoutUrl }.
@@ -15,12 +15,14 @@
  * Required env vars (Cloudflare Pages → Settings → Environment variables):
  *   SHOPIFY_STORE_DOMAIN              e.g. nq5ig1-5w.myshopify.com
  *   SHOPIFY_STOREFRONT_ACCESS_TOKEN   public Storefront API token
+ *   SUPABASE_URL
+ *   SUPABASE_SERVICE_ROLE_KEY
  */
 
 const CART_CREATE_MUTATION = `
   mutation cartCreate($input: CartInput!) {
     cartCreate(input: $input) {
-      cart { id checkoutUrl attributes { key value } }
+      cart { id checkoutUrl }
       userErrors { field message }
     }
   }
@@ -59,7 +61,7 @@ export async function onRequestPost(context) {
   const isSimple = !!body.variant_id;
 
   let cartInput;
-  let redirectAfterValid = false;
+  let redirectAfter = '';
   if (isSimple) {
     /* New format: build a single-line cart from variant_id + assigned_mobile */
     cartInput = {
@@ -71,9 +73,8 @@ export async function onRequestPost(context) {
     };
     /* Cart-level attribute becomes order note_attributes.return_url for WF9.
        Only same-origin Prisoncall return URLs are stored. */
-    const redirectAfter = body.redirect_after;
-    redirectAfterValid = typeof redirectAfter === 'string' && redirectAfter.startsWith('https://prisoncall.com.au/');
-    if (redirectAfterValid) {
+    if (typeof body.redirect_after === 'string' && body.redirect_after.startsWith('https://prisoncall.com.au/')) {
+      redirectAfter = body.redirect_after;
       cartInput.attributes = [{ key: 'return_url', value: redirectAfter }];
     }
   } else {
@@ -138,19 +139,34 @@ export async function onRequestPost(context) {
 
   /* ── Return format matches request format ─────────────────────────────── */
   if (isSimple) {
-    if (redirectAfterValid) {
-      const attrs = (cartCreate.cart && cartCreate.cart.attributes) || [];
-      const hasReturnUrl = attrs.some(function (attr) {
-        return attr && attr.key === 'return_url';
-      });
-      if (!hasReturnUrl) {
-        console.warn('[shopify-cart] return_url was not stored on cart.attributes:', JSON.stringify(attrs));
+    if (redirectAfter) {
+      const SUPABASE_URL = env.SUPABASE_URL;
+      const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        console.error('[shopify-cart] Missing env: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+      } else {
+        try {
+          const intentRes = await fetch(SUPABASE_URL + '/rest/v1/transfer_intents', {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: 'Bearer ' + SUPABASE_KEY,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({
+              assigned_mobile: body.assigned_mobile,
+              transfer_url: redirectAfter,
+            }),
+          });
+          if (!intentRes.ok) {
+            const detail = await intentRes.text().catch(function () { return ''; });
+            console.error('[shopify-cart] transfer_intents insert failed:', intentRes.status, detail.slice(0, 500));
+          }
+        } catch (err) {
+          console.error('[shopify-cart] transfer_intents insert error:', err && err.message);
+        }
       }
-    }
-    /* Shop Pay drops cart attributes. Stay on the store checkout. */
-    if (!/[?&]skip_shop_pay=/.test(checkoutUrl)) {
-      const sep = checkoutUrl.includes('?') ? '&' : '?';
-      checkoutUrl += sep + 'skip_shop_pay=true';
     }
     return jsonRes({ checkout_url: checkoutUrl });
   } else {
