@@ -73,7 +73,9 @@ export async function onRequestPost(context) {
     };
     /* Cart-level attribute becomes order note_attributes.return_url for WF9.
        Only same-origin Prisoncall return URLs are stored. */
-    if (typeof body.redirect_after === 'string' && body.redirect_after.startsWith('https://prisoncall.com.au/')) {
+    const redirectCheckPassed = typeof body.redirect_after === 'string' && body.redirect_after.startsWith('https://prisoncall.com.au/');
+    console.log('[shopify-cart] redirect_after check', redirectCheckPassed ? 'passed' : 'failed', body.redirect_after);
+    if (redirectCheckPassed) {
       redirectAfter = body.redirect_after;
       cartInput.attributes = [{ key: 'return_url', value: redirectAfter }];
     }
@@ -146,6 +148,7 @@ export async function onRequestPost(context) {
         console.error('[shopify-cart] Missing env: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
       } else {
         try {
+          console.log('[shopify-cart] Transfer intent insert attempt', body.assigned_mobile, String(redirectAfter).slice(0, 50));
           const intentRes = await fetch(SUPABASE_URL + '/rest/v1/transfer_intents', {
             method: 'POST',
             headers: {
@@ -159,12 +162,13 @@ export async function onRequestPost(context) {
               transfer_url: redirectAfter,
             }),
           });
+          const detail = await intentRes.text();
+          console.log('[shopify-cart] transfer_intents response', intentRes.status, detail);
           if (!intentRes.ok) {
-            const detail = await intentRes.text().catch(function () { return ''; });
-            console.error('[shopify-cart] transfer_intents insert failed:', intentRes.status, detail.slice(0, 500));
+            console.error('[shopify-cart] transfer_intents insert failed:', intentRes.status, detail);
           }
         } catch (err) {
-          console.error('[shopify-cart] transfer_intents insert error:', err && err.message);
+          console.error('[shopify-cart] transfer_intents insert error:', err);
         }
       }
     }
