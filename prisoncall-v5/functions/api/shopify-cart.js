@@ -68,7 +68,10 @@ export async function onRequestPost(context) {
       lines: [{
         quantity: 1,
         merchandiseId: 'gid://shopify/ProductVariant/' + body.variant_id,
-        attributes: [{ key: 'assigned_mobile', value: String(body.assigned_mobile || '') }],
+        attributes: [
+          { key: 'assigned_mobile', value: String(body.assigned_mobile || '') },
+          { key: 'sub_id', value: String(body.sub_id || '') },
+        ],
       }],
     };
     /* Cart-level attribute becomes order note_attributes.return_url for WF9.

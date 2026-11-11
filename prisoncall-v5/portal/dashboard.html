@@ -1280,7 +1280,7 @@
        TRANSFER MODAL — LP upsell + fee payment
     ════════════════════════════════════════ */
 
-    function doTransferCartCheckout(variantId, redirectAfter) {
+    function doTransferCartCheckout(variantId, redirectAfter, subId) {
       var sub = subs.find(function (s) { return String(s.id) === String(activeTransferSubId); });
       var assignedMobile = sub ? (sub.assigned_mobile || '') : '';
       var lpBtn  = document.getElementById('transferLpBtn');
@@ -1298,6 +1298,7 @@
           variant_id:      variantId,
           assigned_mobile: assignedMobile,
           redirect_after:  redirectAfter,
+          sub_id:          subId || '',
         }),
       })
         .then(function (r) { return r.json(); })
@@ -1324,7 +1325,7 @@
       var stateParam = encodeURIComponent(sub.prison_state || '');
       var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
       var redirectAfter = window.location.origin + '/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=1';
-      doTransferCartCheckout('54535991394583', redirectAfter);
+      doTransferCartCheckout('54535991394583', redirectAfter, sub.seal_subscription_id || '');
     });
 
     document.getElementById('transferFeeBtn').addEventListener('click', function () {
@@ -1334,7 +1335,7 @@
       var stateParam = encodeURIComponent(sub.prison_state || '');
       var subIdParam = encodeURIComponent(sub.seal_subscription_id || '');
       var redirectAfter = window.location.origin + '/transfer-prison?did=' + didParam + '&state=' + stateParam + '&sub_id=' + subIdParam + '&protected=0';
-      doTransferCartCheckout('67658171515159', redirectAfter);
+      doTransferCartCheckout('67658171515159', redirectAfter, sub.seal_subscription_id || '');
     });
 
     /* ════════════════════════════════════════
