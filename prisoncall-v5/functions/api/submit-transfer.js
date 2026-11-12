@@ -1,16 +1,9 @@
 /* POST /api/submit-transfer
-   Body: { did, currentPrison, newPrison, newPrisonState, mobile, currentState }
-   Inserts a row into the transfers table with status PENDING.
-   Column mapping (transfers table):
-     subscription_id  <- looked up from subscriptions by old_did (E.164 format)
-     old_did          <- did (10-digit local, e.g. "0312345678")
-     old_prison_name  <- currentPrison
-     new_prison_name  <- newPrison
-     new_prison_state <- newPrisonState ('vic' | 'nsw')
-     assigned_mobile  <- mobile
-     status           <- 'PENDING'
-   n8n WF3 watches transfers for status = PENDING and sends the confirmation SMS.
-   Returns { success: true } or { success: false, error }.
+   Body: { did, currentPrison, newPrison, newPrisonState, mobile, currentState, seal_subscription_id }
+   Looks up the active subscription by DID. Lifetime Protection inserts
+   PENDING_VOIPLINE / payment_status NOT_REQUIRED and texts admins.
+   Otherwise inserts PENDING_PAYMENT / payment_status PENDING_PAYMENT,
+   skips admin SMS, and returns { success: false, payment_required: true, transfer_id }.
 */
 
 function jsonResponse(body) {
@@ -60,10 +53,11 @@ export async function onRequestPost(context) {
   let subscriptionId = null;
   let customerName   = '';
   let sealSubId      = bodySealSubId;
+  let hasLifetimeProtection = false;
   try {
     const e164 = toE164(did);
     const subUrl = SUPABASE_URL + '/rest/v1/subscriptions?current_did=eq.' +
-      encodeURIComponent(e164) + '&status=eq.ACTIVE&select=id,customer_name,seal_subscription_id&limit=1';
+      encodeURIComponent(e164) + '&status=eq.ACTIVE&select=id,customer_name,seal_subscription_id,has_lifetime_protection&limit=1';
     const subRes = await fetch(subUrl, {
       headers: {
         Authorization: 'Bearer ' + SUPABASE_KEY,
@@ -77,30 +71,52 @@ export async function onRequestPost(context) {
         subscriptionId = subRows[0].id;
         customerName   = subRows[0].customer_name        || '';
         sealSubId      = subRows[0].seal_subscription_id || bodySealSubId;
+        hasLifetimeProtection = subRows[0].has_lifetime_protection === true;
       }
     }
   } catch {
-    /* non-fatal — insert will proceed with subscription_id null */
+    /* non-fatal — insert will proceed with subscription_id null and no lifetime protection */
+    hasLifetimeProtection = false;
   }
 
   const payload = {
-    subscription_id:  subscriptionId,   /* FK — null if DID lookup failed */
-    old_did:          did,
-    old_prison_name:  currentPrison,
-    new_prison_name:  newPrison,
-    new_prison_state: newPrisonState || null,
-    assigned_mobile:  mobile,
-    status:           'PENDING_VOIPLINE',
+    subscription_id:      subscriptionId,   /* FK — null if DID lookup failed */
+    old_did:              did,
+    old_prison_name:      currentPrison,
+    new_prison_name:      newPrison,
+    new_prison_state:     newPrisonState || null,
+    assigned_mobile:      mobile,
+    seal_subscription_id: bodySealSubId,
+    status:               hasLifetimeProtection ? 'PENDING_VOIPLINE' : 'PENDING_PAYMENT',
+    payment_status:       hasLifetimeProtection ? 'NOT_REQUIRED' : 'PENDING_PAYMENT',
   };
 
   try {
+    /* Clear an abandoned payment row so this mobile + plan starts fresh. */
+    const deleteUrl = SUPABASE_URL + '/rest/v1/transfers?assigned_mobile=eq.' +
+      encodeURIComponent(mobile) + '&seal_subscription_id=eq.' + encodeURIComponent(bodySealSubId);
+    const delRes = await fetch(deleteUrl, {
+      method: 'DELETE',
+      headers: {
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        apikey:        SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        Prefer:        'return=minimal',
+      },
+    });
+    if (!delRes.ok) {
+      let detail = '';
+      try { const d = await delRes.json(); detail = d.message || d.error || ''; } catch {}
+      return jsonResponse({ success: false, error: detail || 'Insert failed' });
+    }
+
     const res = await fetch(SUPABASE_URL + '/rest/v1/transfers', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + SUPABASE_KEY,
         apikey:        SUPABASE_KEY,
         'Content-Type': 'application/json',
-        Prefer:        'return=minimal',
+        Prefer:        'return=representation',
       },
       body: JSON.stringify(payload),
     });
@@ -109,6 +125,13 @@ export async function onRequestPost(context) {
       let detail = '';
       try { const d = await res.json(); detail = d.message || d.error || ''; } catch {}
       return jsonResponse({ success: false, error: detail || 'Insert failed' });
+    }
+
+    const inserted = await res.json().catch(() => null);
+    const transferId = Array.isArray(inserted) && inserted[0] ? inserted[0].id : null;
+
+    if (!hasLifetimeProtection) {
+      return jsonResponse({ success: false, payment_required: true, transfer_id: transferId });
     }
 
     /* ── Admin SMS — non-blocking via context.waitUntil ──────────────────── */
