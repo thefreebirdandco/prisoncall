@@ -561,12 +561,12 @@
         <div id="transferStatusView">
           <p id="transferStatusMsg" style="font-size:15px;color:#101010;line-height:1.6;margin:0;"></p>
           <button id="cancelTransferRequestBtn" class="btn btn--danger btn--full" style="margin-top:20px;" hidden>Cancel Transfer Request</button>
+          <button id="closePendingPaymentBtn" class="btn btn--outline btn--full" style="margin-top:20px;" hidden>Close</button>
         </div>
         <div id="transferStatusConfirmView" hidden>
           <p id="transferStatusConfirmMsg" style="font-size:15px;color:#101010;line-height:1.6;margin:0;"></p>
           <div id="transferStatusConfirmBtns">
             <button id="confirmCancelTransferBtn" class="btn btn--danger">Yes, Cancel Request</button>
-            <button id="keepTransferRequestBtn" class="btn btn--outline">Keep Request</button>
           </div>
         </div>
         <p id="transferStatusError" style="margin-top:8px;font-size:13px;color:#c0392b;min-height:18px;text-align:center;"></p>
@@ -1227,22 +1227,21 @@
       if (!pendingTransfer) return;
       var msg       = document.getElementById('transferStatusMsg');
       var cancelBtn = document.getElementById('cancelTransferRequestBtn');
+      var closeBtn  = document.getElementById('closePendingPaymentBtn');
       var errEl     = document.getElementById('transferStatusError');
       var yesBtn    = document.getElementById('confirmCancelTransferBtn');
       if (errEl) errEl.textContent = '';
       if (yesBtn) { yesBtn.disabled = false; yesBtn.textContent = 'Yes, Cancel Request'; }
+      if (closeBtn) { closeBtn.hidden = true; closeBtn.disabled = false; }
       showTransferStatusView();
 
       if (pendingTransfer.status === 'PENDING_VOIPLINE') {
-        var prison = pendingTransfer.new_prison_name || 'your new prison';
-        var st     = (pendingTransfer.new_prison_state || '').toUpperCase();
-        msg.textContent = 'Your transfer request is in progress. Our team is processing your move to ' +
-          prison + (st ? ', ' + st : '') +
-          '. We\u2019ll notify you when your new number is ready.';
+        msg.textContent = 'Your transfer request is being processed. Your new number will be ready within 24-48 hours.';
         if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Transfer Request'; }
       } else if (pendingTransfer.status === 'PENDING_PAYMENT') {
-        msg.textContent = 'Payment pending \u2014 your transfer request is awaiting payment. This request will expire in 10 minutes if payment is not completed.';
-        if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Transfer Request'; }
+        msg.textContent = 'You did not complete payment for your last transfer request. Please submit a new request.';
+        if (cancelBtn) cancelBtn.hidden = true;
+        if (closeBtn) { closeBtn.hidden = false; closeBtn.disabled = false; closeBtn.textContent = 'Close'; }
       } else if (pendingTransfer.status === 'CANCELLATION_REQUESTED') {
         msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
         if (cancelBtn) cancelBtn.hidden = true;
@@ -1251,22 +1250,58 @@
       document.getElementById('transferStatusModal').hidden = false;
     }
 
+    function cancelPendingPaymentAndReload() {
+      if (!pendingTransfer || pendingTransfer.status !== 'PENDING_PAYMENT') {
+        document.getElementById('transferStatusModal').hidden = true;
+        return;
+      }
+      var errEl   = document.getElementById('transferStatusError');
+      var closeBtn = document.getElementById('closePendingPaymentBtn');
+      var xBtn    = document.getElementById('closeTransferStatusModalBtn');
+      if (closeBtn) closeBtn.disabled = true;
+      if (xBtn) xBtn.disabled = true;
+      if (errEl) errEl.textContent = '';
+
+      fetch('/api/portal-supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel-transfer-request',
+          transfer_id: pendingTransfer.id,
+          seal_subscription_id: pendingTransfer.seal_subscription_id || '',
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || 'error');
+          window.location.reload();
+        })
+        .catch(function () {
+          if (closeBtn) closeBtn.disabled = false;
+          if (xBtn) xBtn.disabled = false;
+          if (errEl) errEl.textContent = 'Something went wrong. Please try again.';
+        });
+    }
+
     document.getElementById('closeTransferStatusModalBtn').addEventListener('click', function () {
+      if (pendingTransfer && pendingTransfer.status === 'PENDING_PAYMENT') {
+        cancelPendingPaymentAndReload();
+        return;
+      }
       document.getElementById('transferStatusModal').hidden = true;
+    });
+
+    document.getElementById('closePendingPaymentBtn').addEventListener('click', function () {
+      cancelPendingPaymentAndReload();
     });
 
     document.getElementById('cancelTransferRequestBtn').addEventListener('click', function () {
       if (!pendingTransfer) return;
       var prison = pendingTransfer.new_prison_name || 'your new prison';
       document.getElementById('transferStatusConfirmMsg').textContent =
-        'Are you sure you want to cancel your transfer request to ' + prison + '? Our team will be notified.';
+        'Are you sure you want to cancel your transfer request to ' + prison + '?';
       document.getElementById('transferStatusError').textContent = '';
       showTransferConfirmView();
-    });
-
-    document.getElementById('keepTransferRequestBtn').addEventListener('click', function () {
-      document.getElementById('transferStatusError').textContent = '';
-      showTransferStatusView();
     });
 
     document.getElementById('confirmCancelTransferBtn').addEventListener('click', function () {
@@ -1290,12 +1325,7 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (!data.ok) throw new Error(data.error || 'error');
-          pendingTransfer.status = 'CANCELLATION_REQUESTED';
-          var msg = document.getElementById('transferStatusMsg');
-          var cancelBtn = document.getElementById('cancelTransferRequestBtn');
-          if (msg) msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
-          if (cancelBtn) cancelBtn.hidden = true;
-          showTransferStatusView();
+          window.location.reload();
         })
         .catch(function () {
           btn.disabled = false;
