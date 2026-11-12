@@ -65,6 +65,100 @@
     .btn--green { background: var(--color-green); color: var(--color-black); border: 2px solid var(--color-green); }
     .btn--black { background: var(--color-black); color: var(--color-white); border: 2px solid var(--color-black); }
 
+    #transferPaymentModal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(16, 16, 16, 0.48);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 16px;
+      box-sizing: border-box;
+    }
+    #transferPaymentModal[hidden] { display: none !important; }
+    #transferPaymentModal .ap-modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      max-width: 420px;
+      width: 100%;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      box-sizing: border-box;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(16, 16, 16, 0.18), 0 2px 8px rgba(16, 16, 16, 0.06);
+    }
+    #transferPaymentModal .tm-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    #transferPaymentModal .tm-head h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #000000;
+    }
+    #transferPaymentModal .tm-close {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #000000;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    #transferPaymentModal .tm-body {
+      margin: 12px 0 22px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #333333;
+    }
+    #transferPaymentModal #transferLpBtn,
+    #transferPaymentModal #transferFeeBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 48px;
+      min-height: 48px;
+      padding: 0 16px;
+      border-radius: 14px;
+      box-sizing: border-box;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #000000;
+      cursor: pointer;
+    }
+    #transferPaymentModal #transferLpBtn {
+      background: #00D258;
+      border: none;
+    }
+    #transferPaymentModal #transferFeeBtn {
+      margin-top: 10px;
+      background: #ffffff;
+      border: 1.5px solid #cccccc;
+    }
+    #transferPaymentModal #transferLpBtn:disabled,
+    #transferPaymentModal #transferFeeBtn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    #transferPaymentModal #transferModalError {
+      margin: 12px 0 0;
+      min-height: 18px;
+      font-size: 13px;
+      color: #c0392b;
+      text-align: center;
+    }
+
     /* ═══ HEADER (identical to choose-plan.html) ═══ */
     .header {
       position: sticky; top: 0; z-index: 200;
@@ -467,8 +561,18 @@
     </div>
   </footer>
 
-  <!-- ═══ TRANSFER PRISON MODAL (retired — gutted IIFE, does nothing) ═══ -->
-  <script src="assets/js/transfer-prison-modal.js"></script>
+  <div id="transferPaymentModal" hidden aria-modal="true" role="dialog" aria-labelledby="transferPaymentModalTitle">
+    <div class="ap-modal-card">
+      <div class="tm-head">
+        <h2 id="transferPaymentModalTitle">Payment Required</h2>
+        <button type="button" class="tm-close" id="closeTransferPaymentModalBtn" aria-label="Close">&#x2715;</button>
+      </div>
+      <p class="tm-body">Your transfer request has been saved. Payment must be completed to process it. If you abandon or close the checkout, your request will be cancelled and you will need to start again.</p>
+      <button class="btn btn--green btn--full" id="transferLpBtn" type="button">Get Lifetime Protection &#8212; $19.99</button>
+      <button class="btn btn--outline btn--full" id="transferFeeBtn" type="button">Pay transfer fee &#8212; $24.99</button>
+      <p id="transferModalError"></p>
+    </div>
+  </div>
 
   <script>
   'use strict';
@@ -504,7 +608,8 @@
     confirmedMobile: null,  /* clean 10-digit after OTP verify */
     transferState:   null,  /* Step 4A toggle state for new prison list */
     newPrison:       null,  /* chosen in Step 4A */
-    sealSubId:       null,  /* from URL ?sub_id= — included in submit payload */
+    sealSubId:          null,  /* from URL ?sub_id= — included in submit payload */
+    paymentTransferId:  null,  /* transfers.id when payment is still required */
   };
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -1195,6 +1300,11 @@
           var s6 = buildStep6El();
           tpFlow.appendChild(s6);
           scrollToEl(s6, true);
+        } else if(data.payment_required){
+          state.paymentTransferId = data.transfer_id || null;
+          cont.disabled    = false;
+          cont.textContent = 'Confirm transfer';
+          document.getElementById('transferPaymentModal').hidden = false;
         } else {
           cont.disabled    = false;
           cont.textContent = 'Confirm transfer';
@@ -1232,6 +1342,67 @@
     ].join('');
     return el;
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     PAYMENT MODAL — unpaid transfer goes to Shopify checkout
+  ═══════════════════════════════════════════════════════════════════════ */
+  function doTransferCartCheckout(variantId, redirectAfter, subId, assignedMobile) {
+    var lpBtn  = document.getElementById('transferLpBtn');
+    var feeBtn = document.getElementById('transferFeeBtn');
+    var errEl  = document.getElementById('transferModalError');
+
+    if (lpBtn)  { lpBtn.disabled  = true; lpBtn.textContent  = 'Processing\u2026'; }
+    if (feeBtn) { feeBtn.disabled = true; feeBtn.textContent = 'Processing\u2026'; }
+    if (errEl)  { errEl.textContent = ''; }
+
+    fetch('/api/shopify-cart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        variant_id:      variantId,
+        assigned_mobile: assignedMobile || '',
+        redirect_after:  redirectAfter,
+        sub_id:          subId || '',
+      }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+          if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+          if (errEl)  { errEl.textContent = data.error || 'Something went wrong. Please try again.'; }
+        }
+      })
+      .catch(function () {
+        if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+        if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+        if (errEl)  { errEl.textContent = 'Network error. Please try again.'; }
+      });
+  }
+
+  document.getElementById('closeTransferPaymentModalBtn').addEventListener('click', function () {
+    document.getElementById('transferPaymentModal').hidden = true;
+  });
+
+  document.getElementById('transferLpBtn').addEventListener('click', function () {
+    doTransferCartCheckout(
+      '54535991394583',
+      window.location.origin + '/portal/dashboard.html',
+      state.sealSubId || '',
+      state.confirmedMobile || ''
+    );
+  });
+
+  document.getElementById('transferFeeBtn').addEventListener('click', function () {
+    doTransferCartCheckout(
+      '67658171515159',
+      window.location.origin + '/portal/dashboard.html',
+      state.sealSubId || '',
+      state.confirmedMobile || ''
+    );
+  });
 
   /* ═══════════════════════════════════════════════════════════════════════
      INIT — inject Step 1 and kick off the flow
