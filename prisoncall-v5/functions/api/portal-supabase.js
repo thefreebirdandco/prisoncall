@@ -445,17 +445,6 @@ export async function onRequestPost(context) {
       })
     ));
 
-    const customerTo = '+' + rawMobile;
-    const customerSmsBody = 'Your Prisoncall transfer request has been cancelled. You can submit a new request anytime from your portal.';
-    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({ From: twilioFrom, To: customerTo, Body: customerSmsBody }),
-    });
-
     return json({ ok: true });
   }
 
