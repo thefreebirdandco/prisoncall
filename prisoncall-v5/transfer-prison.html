@@ -1304,6 +1304,7 @@
           state.paymentTransferId = data.transfer_id || null;
           cont.disabled    = false;
           cont.textContent = 'Confirm transfer';
+          paymentModalShownThisLoad = true;
           document.getElementById('transferPaymentModal').hidden = false;
         } else {
           cont.disabled    = false;
@@ -1404,16 +1405,23 @@
     );
   });
 
+  var paymentModalShownThisLoad = false;
+
   function resetPaymentModalButtons() {
-    var modal = document.getElementById('transferPaymentModal');
-    if (!modal || modal.hidden) return;
+    var modal  = document.getElementById('transferPaymentModal');
     var lpBtn  = document.getElementById('transferLpBtn');
     var feeBtn = document.getElementById('transferFeeBtn');
     if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
     if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+    if (modal && !paymentModalShownThisLoad) modal.hidden = true;
   }
 
-  window.addEventListener('pageshow', function () {
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) paymentModalShownThisLoad = false;
+    resetPaymentModalButtons();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
     resetPaymentModalButtons();
   });
 
