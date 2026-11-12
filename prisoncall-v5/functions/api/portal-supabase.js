@@ -172,7 +172,7 @@ export async function onRequestGet(context) {
     const localMobile = rawMobile.startsWith('61') ? '0' + rawMobile.slice(2) : rawMobile;
 
     const res = await sb(
-      `transfers?assigned_mobile=eq.${encodeURIComponent(localMobile)}&status=in.(PENDING_VOIPLINE,CANCELLATION_REQUESTED)&order=created_at.desc&limit=1`
+      `transfers?assigned_mobile=eq.${encodeURIComponent(localMobile)}&status=in.(PENDING_VOIPLINE,CANCELLATION_REQUESTED,PENDING_PAYMENT)&select=id,assigned_mobile,seal_subscription_id,status,new_prison_name,new_prison_state,payment_status,created_at&order=created_at.desc&limit=1`
     );
     if (!res.ok) return json(null);
     const rows = await res.json();
@@ -394,24 +394,33 @@ export async function onRequestPost(context) {
     const rawMobile   = session.mobile || '';
     const localMobile = rawMobile.startsWith('61') ? '0' + rawMobile.slice(2) : rawMobile;
 
-    const { transfer_id } = body;
-    if (!transfer_id) return json({ error: 'missing_fields' }, 400);
+    const { transfer_id, seal_subscription_id } = body;
+    if (!transfer_id || seal_subscription_id == null || String(seal_subscription_id).trim() === '') {
+      return json({ error: 'missing_fields' }, 400);
+    }
+    const requestedSealId = String(seal_subscription_id).trim();
 
-    // Fetch transfer and verify it belongs to this customer
+    // Fetch transfer and verify it belongs to this customer (mobile + Seal plan id)
     const trRes = await sb(`transfers?id=eq.${encodeURIComponent(transfer_id)}&limit=1`);
     if (!trRes.ok) return json({ error: 'db_error' }, 500);
     const trRows = await trRes.json();
     if (!trRows.length) return json({ error: 'not_found' }, 404);
     const transfer = trRows[0];
     if (transfer.assigned_mobile !== localMobile) return json({ error: 'forbidden' }, 403);
-    if (transfer.status !== 'PENDING_VOIPLINE') return json({ error: 'invalid_status' }, 400);
+    if (String(transfer.seal_subscription_id || '') !== requestedSealId) return json({ error: 'forbidden' }, 403);
+    if (transfer.status !== 'PENDING_VOIPLINE' && transfer.status !== 'PENDING_PAYMENT') {
+      return json({ error: 'invalid_status' }, 400);
+    }
 
-    // PATCH transfer to CANCELLATION_REQUESTED
+    // Paid transfers need an admin to action the cancellation. Unpaid ones are cancelled immediately.
+    const nextStatus = transfer.status === 'PENDING_PAYMENT' ? 'CANCELLED' : 'CANCELLATION_REQUESTED';
     await sb(`transfers?id=eq.${encodeURIComponent(transfer_id)}`, {
       method: 'PATCH',
       prefer: 'return=minimal',
-      body: JSON.stringify({ status: 'CANCELLATION_REQUESTED', updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ status: nextStatus, updated_at: new Date().toISOString() }),
     });
+
+    if (transfer.status === 'PENDING_PAYMENT') return json({ ok: true });
 
     // Look up customer name for SMS (subscriptions.assigned_mobile is E.164)
     const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(rawMobile)}&select=customer_name&limit=1`);
