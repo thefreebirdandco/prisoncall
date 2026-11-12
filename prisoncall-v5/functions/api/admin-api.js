@@ -367,7 +367,7 @@ export async function onRequest(context) {
         const twilioFrom = env.TWILIO_SMS_NUMBER;
 
         /* ── 5. Customer SMS ──────────────────────────────────────────── */
-        const customerMobile  = '+' + transfer.assigned_mobile;
+        const customerMobile  = '+' + subsMobile;
         const customerSmsBody = `Your Prisoncall number has been updated. Your new number is ${readableDid}. Please update your contacts.`;
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
           method: 'POST',
@@ -408,7 +408,9 @@ export async function onRequest(context) {
 
         const transfer = Array.isArray(data) ? data[0] : data;
 
-        const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(transfer.assigned_mobile)}&select=customer_name&limit=1`);
+        const rawMobile  = transfer.assigned_mobile || '';
+        const subsMobile = rawMobile.startsWith('0') ? '61' + rawMobile.slice(1) : rawMobile;
+        const subRes = await sb(`subscriptions?assigned_mobile=eq.${encodeURIComponent(subsMobile)}&select=customer_name&limit=1`);
         const subRows = await subRes.json();
         const customerName = (Array.isArray(subRows) && subRows[0]?.customer_name) || transfer.assigned_mobile;
 
