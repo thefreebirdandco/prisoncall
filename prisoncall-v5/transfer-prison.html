@@ -1404,6 +1404,23 @@
     );
   });
 
+  function resetPaymentModalButtons() {
+    var modal = document.getElementById('transferPaymentModal');
+    if (!modal || modal.hidden) return;
+    var lpBtn  = document.getElementById('transferLpBtn');
+    var feeBtn = document.getElementById('transferFeeBtn');
+    if (lpBtn)  { lpBtn.disabled  = false; lpBtn.textContent  = 'Get Lifetime Protection \u2014 $19.99'; }
+    if (feeBtn) { feeBtn.disabled = false; feeBtn.textContent = 'Pay transfer fee \u2014 $24.99'; }
+  }
+
+  window.addEventListener('pageshow', function () {
+    resetPaymentModalButtons();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') resetPaymentModalButtons();
+  });
+
   /* ═══════════════════════════════════════════════════════════════════════
      INIT — inject Step 1 and kick off the flow
   ═══════════════════════════════════════════════════════════════════════ */
