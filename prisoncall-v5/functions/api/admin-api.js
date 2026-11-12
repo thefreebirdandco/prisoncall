@@ -318,7 +318,7 @@ export async function onRequest(context) {
         /* ── 1. Mark transfer COMPLETED ───────────────────────────────── */
         const r = await sb(`transfers?id=eq.${id}&select=*,subscriptions(seal_subscription_id)`, {
           method: 'PATCH',
-          body: JSON.stringify({ status: 'COMPLETED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+          body: JSON.stringify({ status: 'COMPLETED', new_did, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
         });
         const data = await r.json();
         if (!r.ok) return json({ error: data.message || 'Update failed' }, 500);
