@@ -1240,7 +1240,10 @@
           prison + (st ? ', ' + st : '') +
           '. We\u2019ll notify you when your new number is ready.';
         if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Transfer Request'; }
-      } else {
+      } else if (pendingTransfer.status === 'PENDING_PAYMENT') {
+        msg.textContent = 'Payment pending \u2014 your transfer request is awaiting payment.';
+        if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Transfer Request'; }
+      } else if (pendingTransfer.status === 'CANCELLATION_REQUESTED') {
         msg.textContent = 'Your cancellation request has been received. Our team will be in touch shortly.';
         if (cancelBtn) cancelBtn.hidden = true;
       }
