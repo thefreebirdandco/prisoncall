@@ -432,7 +432,7 @@ export async function onRequestPost(context) {
     const twilioAuth = env.TWILIO_AUTH_TOKEN;
     const twilioFrom = env.TWILIO_SMS_NUMBER;
     const prisonInfo = (transfer.new_prison_name || '') + (transfer.new_prison_state ? ' (' + transfer.new_prison_state + ')' : '');
-    const smsBody = `TRANSFER CANCELLATION REQUESTED - ${customerName} has requested to cancel their transfer to ${prisonInfo}. Log in to admin portal to action.`;
+    const smsBody = `TRANSFER CANCELLED - Seal ID: ${transfer.seal_subscription_id}. ${customerName} has cancelled their transfer request to ${prisonInfo}. No action required.`;
 
     await Promise.all(['+61413598815', '+61422749601'].map(to =>
       fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
