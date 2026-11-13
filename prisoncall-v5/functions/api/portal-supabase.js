@@ -412,8 +412,8 @@ export async function onRequestPost(context) {
       return json({ error: 'invalid_status' }, 400);
     }
 
-    // Paid transfers need an admin to action the cancellation. Unpaid ones are cancelled immediately.
-    const nextStatus = transfer.status === 'PENDING_PAYMENT' ? 'CANCELLED' : 'CANCELLATION_REQUESTED';
+    // Paid and unpaid transfers are cancelled immediately.
+    const nextStatus = 'CANCELLED';
     await sb(`transfers?id=eq.${encodeURIComponent(transfer_id)}`, {
       method: 'PATCH',
       prefer: 'return=minimal',

@@ -86,7 +86,7 @@ let pending = [];
 async function loadTransfers() {
   try {
     const data = await api('get-transfers');
-    pending = (Array.isArray(data) ? data : []).filter(t => t.status === 'PENDING_VOIPLINE' || t.status === 'CANCELLATION_REQUESTED');
+    pending = (Array.isArray(data) ? data : []).filter(t => t.status === 'PENDING_VOIPLINE');
     renderTable();
   } catch (err) {
     document.getElementById('transfersBody').innerHTML =
